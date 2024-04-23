@@ -1,4 +1,4 @@
-FROM python:3.10
+FROM python:3.10-slim
 
 ADD python_scripts/process_casanovo_results.py /usr/local/bin/process_casanovo_results.py
 ADD python_scripts/process_comet_results.py /usr/local/bin/process_comet_results.py
