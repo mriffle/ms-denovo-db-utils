@@ -5,7 +5,7 @@ Date: April 23, 2024
 Description: This script reads one or more tab-delimited text files specified on the command line,
              finds the best PSM line for each distinct peptide based on the highest "search_engine_score[1]",
              and outputs the results to standard out
-Usage: python3 find_best_psm_lines.py file1.txt file2.txt file3.txt
+Usage: python3 process_casanovo_results.py file1.txt file2.txt file3.txt
 """
 
 import sys
