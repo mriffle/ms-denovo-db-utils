@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Usage: split_fasta.sh <fasta_file> <number_of_parts>
 
 # Check if sufficient arguments were provided
@@ -27,15 +27,26 @@ total_sequences=$(grep -c "^>" "$fasta_file")
 # Determine the minimum of the total sequences and the user-defined number of parts.
 N=$((total_sequences < user_defined_parts ? total_sequences : user_defined_parts))
 
-# Split the FASTA file while keeping sequences intact.
-awk -v N=$N 'BEGIN {file_number = 1; sequence_number = 0; file_name = sprintf("query_part%d.fasta", file_number);}
-  /^>/ {
-    if (file_number < N && sequence_number >= int((NR-1)/N) + 1) {
-      close(file_name);
-      file_number++;
-      file_name = sprintf("query_part%d.fasta", file_number);
-      sequence_number = 0;
+# Calculate the number of sequences per part.
+sequences_per_part=$(( (total_sequences + N - 1) / N ))
+
+# Use awk to split the file, making sure sequences stay together and are evenly distributed.
+awk -v sequences_per_part="$sequences_per_part" -v N="$N" '
+BEGIN {
+    file_number = 1;
+    sequence_count = 0;
+    file_name = sprintf("query_part%d.fasta", file_number);
+}
+/^>/ {
+    if (sequence_count >= sequences_per_part) {
+        close(file_name);
+        file_number++;
+        file_name = sprintf("query_part%d.fasta", file_number);
+        sequence_count = 0;
     }
-  }
-  { print >> file_name; if (/^>/) sequence_number++; }
+}
+{
+    print >> file_name;
+    if (/^>/) sequence_count++;
+}
 ' "$fasta_file"
