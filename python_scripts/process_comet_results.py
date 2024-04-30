@@ -11,26 +11,27 @@ Usage: python3 process_comet_results.py file1.txt file2.txt file3.txt
 import sys
 import csv
 
+def is_n_tryptic(modified_peptide):
+    return 1 if modified_peptide.startswith(('R', 'K')) else 0
+
+def is_c_tryptic(plain_peptide):
+    return 1 if plain_peptide.endswith(('R', 'K')) else 0
+
 def process_files(file_paths):
-
     peptide_data = {}
-
     for file_path in file_paths:
         with open(file_path, 'r') as file:
-            
             # Skip the first line
             next(file)
-            
             reader = csv.reader(file, delimiter='\t')
-            
             # Get the headers and cache the column indices
             headers = next(reader)
-
             try:
                 plain_peptide_index = headers.index('plain_peptide')
                 charge_index = headers.index('charge')
                 e_value_index = headers.index('e-value')
                 protein_index = headers.index('protein')
+                modified_peptide_index = headers.index('modified_peptide')
             except ValueError as e:
                 print(f"Error: Missing expected column in file: {file_path}")
                 print(f"Column not found: {str(e)}")
@@ -42,19 +43,22 @@ def process_files(file_paths):
                 charge = row[charge_index]
                 e_value = float(row[e_value_index])
                 protein = row[protein_index]
+                modified_peptide = row[modified_peptide_index]
                 
                 if plain_peptide not in peptide_data or e_value < peptide_data[plain_peptide]['e_value']:
                     peptide_data[plain_peptide] = {
                         'charge': charge,
                         'e_value': e_value,
                         'protein': protein,
-                        'file': file_path
+                        'file': file_path,
+                        'tryptic_n': is_n_tryptic(modified_peptide),
+                        'tryptic_c': is_c_tryptic(plain_peptide)
                     }
-
+    
     # Output the results
-    print("plain_peptide\tcharge\te-value\tprotein\tfile")
+    print("plain_peptide\tcharge\te-value\tprotein\tfile\ttryptic_n\ttryptic_c")
     for peptide, data in peptide_data.items():
-        print(f"{peptide}\t{data['charge']}\t{data['e_value']}\t{data['protein']}\t{data['file']}")
+        print(f"{peptide}\t{data['charge']}\t{data['e_value']}\t{data['protein']}\t{data['file']}\t{data['tryptic_n']}\t{data['tryptic_c']}")
 
 def main():
     # Check if file paths are provided as command-line arguments
