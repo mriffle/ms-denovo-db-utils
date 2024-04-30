@@ -11,14 +11,19 @@ Usage: python3 process_comet_results.py file1.txt file2.txt file3.txt
 import sys
 import csv
 
+MASS_OF_PROTON = 1.00727647
+
 def is_n_tryptic(modified_peptide):
     return 1 if modified_peptide.startswith(('R', 'K')) else 0
 
 def is_c_tryptic(plain_peptide):
     return 1 if plain_peptide.endswith(('R', 'K')) else 0
 
-def calculate_error_ppm(expected_mass, observed_mass):
-    error_ppm = (observed_mass - expected_mass) / expected_mass * 1000000
+def calculate_mz(neutral_mass, charge):
+    return (neutral_mass + (charge * MASS_OF_PROTON)) / charge
+
+def calculate_error_ppm(expected_mz, observed_mz):
+    error_ppm = (observed_mz - expected_mz) / expected_mz * 1000000
     return error_ppm
 
 def process_files(file_paths):
@@ -47,12 +52,16 @@ def process_files(file_paths):
             # Process each row of data
             for row in reader:
                 plain_peptide = row[plain_peptide_index]
-                charge = row[charge_index]
+                charge = int(row[charge_index])
                 e_value = float(row[e_value_index])
                 protein = row[protein_index]
                 modified_peptide = row[modified_peptide_index]
                 calc_neutral_mass = float(row[calc_neutral_mass_index])
                 exp_neutral_mass = float(row[exp_neutral_mass_index])
+                
+                # Calculate m/z values
+                calc_mz = calculate_mz(calc_neutral_mass, charge)
+                exp_mz = calculate_mz(exp_neutral_mass, charge)
                 
                 # Increment the count for the plain_peptide
                 peptide_counts[plain_peptide] = peptide_counts.get(plain_peptide, 0) + 1
@@ -65,14 +74,14 @@ def process_files(file_paths):
                         'file': file_path,
                         'tryptic_n': is_n_tryptic(modified_peptide),
                         'tryptic_c': is_c_tryptic(plain_peptide),
-                        'ppm_error': calculate_error_ppm(calc_neutral_mass, exp_neutral_mass)
+                        'mz_ppm_error': calculate_error_ppm(calc_mz, exp_mz)
                     }
     
     # Output the results
-    print("plain_peptide\tcharge\te-value\tprotein\tfile\ttryptic_n\ttryptic_c\tnum_spectra\tppm_error")
+    print("plain_peptide\tcharge\te-value\tprotein\tfile\ttryptic_n\ttryptic_c\tnum_spectra\tmz_ppm_error")
     for peptide, data in peptide_data.items():
         num_spectra = peptide_counts[peptide]
-        print(f"{peptide}\t{data['charge']}\t{data['e_value']}\t{data['protein']}\t{data['file']}\t{data['tryptic_n']}\t{data['tryptic_c']}\t{num_spectra}\t{data['ppm_error']:.2f}")
+        print(f"{peptide}\t{data['charge']}\t{data['e_value']}\t{data['protein']}\t{data['file']}\t{data['tryptic_n']}\t{data['tryptic_c']}\t{num_spectra}\t{data['mz_ppm_error']:.2f}")
 
 def main():
     # Check if file paths are provided as command-line arguments
