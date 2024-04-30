@@ -12,9 +12,16 @@ import sys
 import csv
 import re
 
-def calculate_error_ppm(expected_mass, observed_mass):
-    error_ppm = (observed_mass - expected_mass) / expected_mass * 1000000
-    return error_ppm
+DELTA_MASS_13C = 1.003355
+
+def calculate_error_ppm(expected_mz, observed_mz, charge):
+    min_error_ppm = float('inf')
+    for num_13c in range(4):
+        adjusted_expected_mz = expected_mz + (num_13c * DELTA_MASS_13C) / charge
+        error_ppm = (observed_mz - adjusted_expected_mz) / adjusted_expected_mz * 1000000
+        if abs(error_ppm) < abs(min_error_ppm):
+            min_error_ppm = error_ppm
+    return min_error_ppm
 
 def process_files(file_paths):
     peptide_data = {}
@@ -36,8 +43,8 @@ def process_files(file_paths):
                 sequence_index = headers.index('sequence')
                 charge_index = headers.index('charge')
                 score_index = headers.index('search_engine_score[1]')
-                expected_mass_index = headers.index('calc_mass_to_charge')
-                observed_mass_index = headers.index('exp_mass_to_charge')
+                expected_mz_index = headers.index('calc_mass_to_charge')
+                observed_mz_index = headers.index('exp_mass_to_charge')
             except ValueError as e:
                 print(f"Error: Missing expected column in file: {file_path}")
                 print(f"Column not found: {str(e)}")
@@ -49,11 +56,11 @@ def process_files(file_paths):
                     continue
 
                 sequence = re.sub(r'[^A-Z]', '', row[sequence_index])
-                charge = row[charge_index]
+                charge = int(row[charge_index])
                 score = float(row[score_index])
-                expected_mass = float(row[expected_mass_index])
-                observed_mass = float(row[observed_mass_index])
-                mz_ppm_error = calculate_error_ppm(expected_mass, observed_mass)
+                expected_mz = float(row[expected_mz_index])
+                observed_mz = float(row[observed_mz_index])
+                mz_ppm_error = calculate_error_ppm(expected_mz, observed_mz, charge)
 
                 # Count the number of occurrences of each peptide sequence
                 peptide_counts[sequence] = peptide_counts.get(sequence, 0) + 1
