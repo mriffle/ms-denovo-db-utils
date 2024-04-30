@@ -19,6 +19,7 @@ def is_c_tryptic(plain_peptide):
 
 def process_files(file_paths):
     peptide_data = {}
+    peptide_counts = {}
     for file_path in file_paths:
         with open(file_path, 'r') as file:
             # Skip the first line
@@ -45,6 +46,9 @@ def process_files(file_paths):
                 protein = row[protein_index]
                 modified_peptide = row[modified_peptide_index]
                 
+                # Increment the count for the plain_peptide
+                peptide_counts[plain_peptide] = peptide_counts.get(plain_peptide, 0) + 1
+                
                 if plain_peptide not in peptide_data or e_value < peptide_data[plain_peptide]['e_value']:
                     peptide_data[plain_peptide] = {
                         'charge': charge,
@@ -56,9 +60,10 @@ def process_files(file_paths):
                     }
     
     # Output the results
-    print("plain_peptide\tcharge\te-value\tprotein\tfile\ttryptic_n\ttryptic_c")
+    print("plain_peptide\tcharge\te-value\tprotein\tfile\ttryptic_n\ttryptic_c\tnum_spectra")
     for peptide, data in peptide_data.items():
-        print(f"{peptide}\t{data['charge']}\t{data['e_value']}\t{data['protein']}\t{data['file']}\t{data['tryptic_n']}\t{data['tryptic_c']}")
+        num_spectra = peptide_counts[peptide]
+        print(f"{peptide}\t{data['charge']}\t{data['e_value']}\t{data['protein']}\t{data['file']}\t{data['tryptic_n']}\t{data['tryptic_c']}\t{num_spectra}")
 
 def main():
     # Check if file paths are provided as command-line arguments
