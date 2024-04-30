@@ -56,7 +56,7 @@ def process_files(file_paths):
                     continue
 
                 sequence = re.sub(r'[^A-Z]', '', row[sequence_index])
-                charge = int(row[charge_index])
+                charge = int(float(row[charge_index]))
                 score = float(row[score_index])
                 expected_mz = float(row[expected_mz_index])
                 observed_mz = float(row[observed_mz_index])
