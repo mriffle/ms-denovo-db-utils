@@ -17,6 +17,10 @@ def is_n_tryptic(modified_peptide):
 def is_c_tryptic(plain_peptide):
     return 1 if plain_peptide.endswith(('R', 'K')) else 0
 
+def calculate_error_ppm(expected_mass, observed_mass):
+    error_ppm = (observed_mass - expected_mass) / expected_mass * 1000000
+    return error_ppm
+
 def process_files(file_paths):
     peptide_data = {}
     peptide_counts = {}
@@ -33,6 +37,8 @@ def process_files(file_paths):
                 e_value_index = headers.index('e-value')
                 protein_index = headers.index('protein')
                 modified_peptide_index = headers.index('modified_peptide')
+                calc_neutral_mass_index = headers.index('calc_neutral_mass')
+                exp_neutral_mass_index = headers.index('exp_neutral_mass')
             except ValueError as e:
                 print(f"Error: Missing expected column in file: {file_path}")
                 print(f"Column not found: {str(e)}")
@@ -45,6 +51,8 @@ def process_files(file_paths):
                 e_value = float(row[e_value_index])
                 protein = row[protein_index]
                 modified_peptide = row[modified_peptide_index]
+                calc_neutral_mass = float(row[calc_neutral_mass_index])
+                exp_neutral_mass = float(row[exp_neutral_mass_index])
                 
                 # Increment the count for the plain_peptide
                 peptide_counts[plain_peptide] = peptide_counts.get(plain_peptide, 0) + 1
@@ -56,14 +64,15 @@ def process_files(file_paths):
                         'protein': protein,
                         'file': file_path,
                         'tryptic_n': is_n_tryptic(modified_peptide),
-                        'tryptic_c': is_c_tryptic(plain_peptide)
+                        'tryptic_c': is_c_tryptic(plain_peptide),
+                        'ppm_error': calculate_error_ppm(calc_neutral_mass, exp_neutral_mass)
                     }
     
     # Output the results
-    print("plain_peptide\tcharge\te-value\tprotein\tfile\ttryptic_n\ttryptic_c\tnum_spectra")
+    print("plain_peptide\tcharge\te-value\tprotein\tfile\ttryptic_n\ttryptic_c\tnum_spectra\tppm_error")
     for peptide, data in peptide_data.items():
         num_spectra = peptide_counts[peptide]
-        print(f"{peptide}\t{data['charge']}\t{data['e_value']}\t{data['protein']}\t{data['file']}\t{data['tryptic_n']}\t{data['tryptic_c']}\t{num_spectra}")
+        print(f"{peptide}\t{data['charge']}\t{data['e_value']}\t{data['protein']}\t{data['file']}\t{data['tryptic_n']}\t{data['tryptic_c']}\t{num_spectra}\t{data['ppm_error']:.2f}")
 
 def main():
     # Check if file paths are provided as command-line arguments
