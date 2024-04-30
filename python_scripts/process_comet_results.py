@@ -12,6 +12,7 @@ import sys
 import csv
 
 MASS_OF_PROTON = 1.00727647
+DELTA_MASS_13C = 1.003355
 
 def is_n_tryptic(modified_peptide):
     return 1 if modified_peptide.startswith(('R', 'K')) else 0
@@ -22,9 +23,17 @@ def is_c_tryptic(plain_peptide):
 def calculate_mz(neutral_mass, charge):
     return (neutral_mass + (charge * MASS_OF_PROTON)) / charge
 
-def calculate_error_ppm(expected_mz, observed_mz):
-    error_ppm = (observed_mz - expected_mz) / expected_mz * 1000000
-    return error_ppm
+def calculate_error_ppm(expected_mz, observed_mz, charge):
+    min_error_ppm = float('inf')
+    
+    for num_13c in range(4):
+        adjusted_expected_mz = expected_mz + (num_13c * DELTA_MASS_13C) / charge
+        error_ppm = (observed_mz - adjusted_expected_mz) / adjusted_expected_mz * 1000000
+        
+        if abs(error_ppm) < abs(min_error_ppm):
+            min_error_ppm = error_ppm
+    
+    return min_error_ppm
 
 def process_files(file_paths):
     peptide_data = {}
@@ -74,7 +83,7 @@ def process_files(file_paths):
                         'file': file_path,
                         'tryptic_n': is_n_tryptic(modified_peptide),
                         'tryptic_c': is_c_tryptic(plain_peptide),
-                        'mz_ppm_error': calculate_error_ppm(calc_mz, exp_mz)
+                        'mz_ppm_error': calculate_error_ppm(calc_mz, exp_mz, charge)
                     }
     
     # Output the results
