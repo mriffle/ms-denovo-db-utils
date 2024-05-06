@@ -124,7 +124,7 @@ def output_peptide_data_for_reset(comet_map, casanovo_map, glsearch_map, decoy_p
         comet_data = comet_map.get(peptide, {})
 
         spec_id = peptide
-        label = -1 if glsearch_data.get('sseqid', '').startswith(decoy_prefix) else 1
+        label = -1 if glsearch_data.get('sseqid', '').startswith(decoy_prefix) or comet_data.get('is_decoy') == 1 else 1
 
         database_peptide_length = int(glsearch_data.get('send', 0)) - int(glsearch_data.get('sstart', 0)) + 1
         glsearch_evalue = glsearch_data.get('evalue', 0)
