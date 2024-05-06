@@ -89,7 +89,7 @@ def process_files(file_paths, decoy_prefix):
                         'tryptic_n': is_n_tryptic(modified_peptide),
                         'tryptic_c': is_c_tryptic(plain_peptide),
                         'mz_ppm_error': calculate_error_ppm(calc_mz, exp_mz, charge),
-                        'is_decoy': is_decoy(protein, decoy_prefix)
+                        'is_decoy': int(is_decoy(protein, decoy_prefix))
                     }
     
     # Output the results
@@ -101,7 +101,7 @@ def process_files(file_paths, decoy_prefix):
 def main():
     # Set up command-line argument parsing
     parser = argparse.ArgumentParser(description='Process Comet results files.')
-    parser.add_argument('--decoy_prefix', type=str, default='decoy_', help='Decoy protein prefix (default: decoy_)')
+    parser.add_argument('--decoy_prefix', type=str, default='DECOY_', help='Decoy protein prefix (default: DECOY_)')
     parser.add_argument('files', nargs='+', help='Input Comet result files')
 
     # Parse the command-line arguments
