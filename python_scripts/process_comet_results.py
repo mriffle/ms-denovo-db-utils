@@ -5,11 +5,12 @@ Date: April 23, 2024
 Description: This script reads one or more tab-delimited text files specified on the command line,
              finds the best line for each distinct peptide based on the lowest "e-value", and outputs
              the results to standard out.
-Usage: python3 process_comet_results.py file1.txt file2.txt file3.txt
+Usage: python3 process_comet_results.py --decoy_prefix DECOY_ file1.txt file2.txt file3.txt
 """
 
 import sys
 import csv
+import argparse
 
 MASS_OF_PROTON = 1.00727647
 DELTA_MASS_13C = 1.003355
@@ -35,7 +36,11 @@ def calculate_error_ppm(expected_mz, observed_mz, charge):
     
     return min_error_ppm
 
-def process_files(file_paths):
+def is_decoy(protein, decoy_prefix):
+    proteins = protein.split(',')
+    return all(p.startswith(decoy_prefix) for p in proteins)
+
+def process_files(file_paths, decoy_prefix):
     peptide_data = {}
     peptide_counts = {}
     for file_path in file_paths:
@@ -83,23 +88,27 @@ def process_files(file_paths):
                         'file': file_path,
                         'tryptic_n': is_n_tryptic(modified_peptide),
                         'tryptic_c': is_c_tryptic(plain_peptide),
-                        'mz_ppm_error': calculate_error_ppm(calc_mz, exp_mz, charge)
+                        'mz_ppm_error': calculate_error_ppm(calc_mz, exp_mz, charge),
+                        'is_decoy': is_decoy(protein, decoy_prefix)
                     }
     
     # Output the results
-    print("plain_peptide\tcharge\te-value\tprotein\tfile\ttryptic_n\ttryptic_c\tnum_spectra\tmz_ppm_error")
+    print("plain_peptide\tcharge\te-value\tprotein\tfile\ttryptic_n\ttryptic_c\tnum_spectra\tmz_ppm_error\tis_decoy\tproteins")
     for peptide, data in peptide_data.items():
         num_spectra = peptide_counts[peptide]
-        print(f"{peptide}\t{data['charge']}\t{data['e_value']}\t{data['protein']}\t{data['file']}\t{data['tryptic_n']}\t{data['tryptic_c']}\t{num_spectra}\t{data['mz_ppm_error']:.2f}")
+        print(f"{peptide}\t{data['charge']}\t{data['e_value']}\t{data['protein']}\t{data['file']}\t{data['tryptic_n']}\t{data['tryptic_c']}\t{num_spectra}\t{data['mz_ppm_error']:.2f}\t{data['is_decoy']}\t{data['protein']}")
 
 def main():
-    # Check if file paths are provided as command-line arguments
-    if len(sys.argv) < 2:
-        print("Please provide one or more file paths as command-line arguments.")
-        return
-    
+    # Set up command-line argument parsing
+    parser = argparse.ArgumentParser(description='Process Comet results files.')
+    parser.add_argument('--decoy_prefix', type=str, default='decoy_', help='Decoy protein prefix (default: decoy_)')
+    parser.add_argument('files', nargs='+', help='Input Comet result files')
+
+    # Parse the command-line arguments
+    args = parser.parse_args()
+
     # Process the files
-    process_files(sys.argv[1:])
+    process_files(args.files, args.decoy_prefix)
 
 if __name__ == '__main__':
     main()
