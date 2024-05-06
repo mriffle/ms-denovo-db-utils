@@ -3,6 +3,11 @@ import sys
 def reverse_sequence(sequence):
     return sequence[::-1]
 
+def print_entry(header, sequence):
+    sequence = sequence.rstrip('*')
+    print(f"{header}\n{sequence}")
+    print(f">DECOY_{header[1:]}\n{reverse_sequence(sequence)}")
+
 def process_fasta_file(input_file):
     header = ""
     sequence = ""
@@ -11,18 +16,14 @@ def process_fasta_file(input_file):
         for line in file_in:
             if line.startswith('>'):
                 if header and sequence:
-                    sequence = sequence.rstrip('*')
-                    print(f"{header}\n{sequence}")
-                    print(f">DECOY_{header[1:]}\n{reverse_sequence(sequence)}")
+                    print_entry(header, sequence)
                 header = line.strip()
                 sequence = ""
             else:
                 sequence += line.strip()
 
         if header and sequence:
-            sequence = sequence.rstrip('*')
-            print(f"{header}\n{sequence}")
-            print(f">DECOY_{header[1:]}\n{reverse_sequence(sequence)}")
+            print_entry(header, sequence)
 
 # Check if the input file is provided as a command-line argument
 if len(sys.argv) < 2:
