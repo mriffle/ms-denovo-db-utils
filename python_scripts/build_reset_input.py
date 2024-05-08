@@ -105,7 +105,7 @@ def output_peptide_data_for_reset(comet_map, casanovo_map, glsearch_map, decoy_p
     comet_charges = set(data['charge'] for data in comet_map.values())
 
     header = [
-        "SpecId", "Label", "ScanNr", "database_peptide_length", "glsearch_evalue", "glsearch_perc_identity",
+        "SpecId", "Label", "ScanNr", "database_peptide_length", "glsearch_bitscore", "glsearch_perc_identity",
         "casanovo_num_spectra", "casanovo_best_score", "casanovo_ppm_error",
         "comet_num_spectra", "comet_n_tryptic", "comet_c_tryptic", "comet_best_score", "comet_ppm_error"
     ]
@@ -127,7 +127,7 @@ def output_peptide_data_for_reset(comet_map, casanovo_map, glsearch_map, decoy_p
         label = -1 if glsearch_data.get('sseqid', '').startswith(decoy_prefix) or comet_data.get('is_decoy') == 1 else 1
 
         database_peptide_length = int(glsearch_data.get('send', 0)) - int(glsearch_data.get('sstart', 0)) + 1
-        glsearch_evalue = glsearch_data.get('evalue', 0)
+        glsearch_bitscore = glsearch_data.get('bitscore', 0)
         glsearch_perc_identity = glsearch_data.get('pident', 0)
 
         casanovo_num_spectra = casanovo_data.get('num_spectra', 0)
@@ -147,7 +147,7 @@ def output_peptide_data_for_reset(comet_map, casanovo_map, glsearch_map, decoy_p
         proteins = glsearch_data.get('sseqid', '')
 
         row = [
-            spec_id, label, scan_nr, database_peptide_length, glsearch_evalue, glsearch_perc_identity,
+            spec_id, label, scan_nr, database_peptide_length, glsearch_bitscore, glsearch_perc_identity,
             casanovo_num_spectra, casanovo_best_score, casanovo_ppm_error,
             comet_num_spectra, comet_n_tryptic, comet_c_tryptic, comet_best_score, comet_ppm_error
         ]
