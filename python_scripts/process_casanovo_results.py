@@ -62,6 +62,12 @@ def process_files(file_paths):
                 observed_mz = float(row[observed_mz_index])
                 mz_ppm_error = calculate_error_ppm(expected_mz, observed_mz, charge)
 
+                # We effectively disable Casanovo’s precursor m/z filtering by adding 1
+                # to any negative Casanovo score, thereby ensuring that all scores are
+                # in the range [0,1].
+                if score < 0:
+                    score += 1
+
                 # Count the number of occurrences of each peptide sequence
                 peptide_counts[sequence] = peptide_counts.get(sequence, 0) + 1
 
