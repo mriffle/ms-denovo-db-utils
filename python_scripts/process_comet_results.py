@@ -72,6 +72,10 @@ def process_files(file_paths, decoy_prefix):
                 modified_peptide = row[modified_peptide_index]
                 calc_neutral_mass = float(row[calc_neutral_mass_index])
                 exp_neutral_mass = float(row[exp_neutral_mass_index])
+
+                # skip this row if it's a decoy hit
+                if(is_decoy(protein, decoy_prefix)):
+                    continue
                 
                 # Calculate m/z values
                 calc_mz = calculate_mz(calc_neutral_mass, charge)
