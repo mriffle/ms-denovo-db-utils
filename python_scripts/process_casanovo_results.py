@@ -23,6 +23,31 @@ def calculate_error_ppm(expected_mz, observed_mz, charge):
             min_error_ppm = error_ppm
     return min_error_ppm
 
+
+def add_rank_score_to_peptide_data(peptide_data):
+    total_peptides = len(peptide_data)
+    
+    # Extract scores and sort them in descending order (highest score = best rank)
+    scores = [data['score'] for data in peptide_data.values()]
+    unique_scores = sorted(set(scores), reverse=True)
+    
+    # Create a mapping from score to rank
+    score_to_rank = {}
+    current_rank = 1
+    
+    for score in unique_scores:
+        score_to_rank[score] = current_rank
+
+        # Count how many peptides have this score to determine next rank
+        count_with_score = scores.count(score)
+        current_rank += count_with_score
+    
+    # Add rank_score to each peptide
+    for sequence, data in peptide_data.items():
+        rank = score_to_rank[data['score']]
+        data['rank_score'] = rank / total_peptides
+
+
 def process_files(file_paths):
     peptide_data = {}
     peptide_counts = {}
@@ -82,10 +107,13 @@ def process_files(file_paths):
                 else:
                     peptide_data[sequence]['num_spectra'] = peptide_counts[sequence]
 
+    # add a rank score to each peptide
+    add_rank_score_to_peptide_data(peptide_data)
+
     # Output the results
-    print("peptide_sequence\tcharge\tsearch_engine_score[1]\tfile\tmz_ppm_error\tnum_spectra")
+    print("peptide_sequence\tcharge\tsearch_engine_score[1]\tfile\tmz_ppm_error\tnum_spectra\trank_score")
     for peptide, data in peptide_data.items():
-        print(f"{peptide}\t{data['charge']}\t{data['score']}\t{data['file']}\t{data['mz_ppm_error']:.2f}\t{data['num_spectra']}")
+        print(f"{peptide}\t{data['charge']}\t{data['score']}\t{data['file']}\t{data['mz_ppm_error']:.2f}\t{data['num_spectra']}\t{data['rank_score']}")
 
 def main():
     """

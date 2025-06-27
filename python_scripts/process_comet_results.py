@@ -40,6 +40,31 @@ def is_decoy(protein, decoy_prefix):
     proteins = protein.split(',')
     return all(p.startswith(decoy_prefix) for p in proteins)
 
+
+def add_rank_score_to_peptide_data(peptide_data):
+    total_peptides = len(peptide_data)
+    
+    # Extract e_values and sort them in ascending order (lowest e_value = best rank)
+    e_values = [data['e_value'] for data in peptide_data.values()]
+    unique_e_values = sorted(set(e_values))
+    
+    # Create a mapping from e_value to rank
+    e_value_to_rank = {}
+    current_rank = 1
+    
+    for e_value in unique_e_values:
+        e_value_to_rank[e_value] = current_rank
+
+        # Count how many peptides have this e_value to determine next rank
+        count_with_e_value = e_values.count(e_value)
+        current_rank += count_with_e_value
+    
+    # Add rank_score to each peptide
+    for sequence, data in peptide_data.items():
+        rank = e_value_to_rank[data['e_value']]
+        data['rank_score'] = rank / total_peptides
+
+
 def process_files(file_paths, decoy_prefix):
     peptide_data = {}
     peptide_counts = {}
@@ -72,10 +97,6 @@ def process_files(file_paths, decoy_prefix):
                 modified_peptide = row[modified_peptide_index]
                 calc_neutral_mass = float(row[calc_neutral_mass_index])
                 exp_neutral_mass = float(row[exp_neutral_mass_index])
-
-                # skip this row if it's a decoy hit
-                if(is_decoy(protein, decoy_prefix)):
-                    continue
                 
                 # Calculate m/z values
                 calc_mz = calculate_mz(calc_neutral_mass, charge)
@@ -96,11 +117,15 @@ def process_files(file_paths, decoy_prefix):
                         'is_decoy': int(is_decoy(protein, decoy_prefix))
                     }
     
+    # add a rank score to each peptide
+    add_rank_score_to_peptide_data(peptide_data)
+
     # Output the results
-    print("plain_peptide\tcharge\te-value\tprotein\tfile\ttryptic_n\ttryptic_c\tnum_spectra\tmz_ppm_error\tis_decoy\tproteins")
+    print("plain_peptide\tcharge\te-value\tprotein\tfile\ttryptic_n\ttryptic_c\tnum_spectra\tmz_ppm_error\tis_decoy\tproteins\trank_score")
     for peptide, data in peptide_data.items():
-        num_spectra = peptide_counts[peptide]
-        print(f"{peptide}\t{data['charge']}\t{data['e_value']}\t{data['protein']}\t{data['file']}\t{data['tryptic_n']}\t{data['tryptic_c']}\t{num_spectra}\t{data['mz_ppm_error']:.2f}\t{data['is_decoy']}\t{data['protein']}")
+        if data['is_decoy'] == 0:
+            num_spectra = peptide_counts[peptide]
+            print(f"{peptide}\t{data['charge']}\t{data['e_value']}\t{data['protein']}\t{data['file']}\t{data['tryptic_n']}\t{data['tryptic_c']}\t{num_spectra}\t{data['mz_ppm_error']:.2f}\t{data['is_decoy']}\t{data['protein']}\t{data['rank_score']}")
 
 def main():
     # Set up command-line argument parsing

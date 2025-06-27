@@ -108,7 +108,7 @@ def output_peptide_data_for_reset(comet_map, casanovo_map, diamond_map, decoy_pr
     header = [
         "SpecId", "Label", "ScanNr", "database_peptide_length", "diamond_bitscore", "diamond_perc_identity",
         "casanovo_num_spectra", "casanovo_best_score", "casanovo_ppm_error",
-        "comet_num_spectra", "comet_n_tryptic", "comet_c_tryptic", "comet_best_score", "comet_ppm_error"
+        "comet_num_spectra", "comet_n_tryptic", "comet_c_tryptic", "comet_best_score", "comet_ppm_error", "combined_rank_score"
     ]
     header.extend(f"casanovo_charge{charge}" for charge in casanovo_charges)
     header.extend(f"comet_charge{charge}" for charge in comet_charges)
@@ -141,6 +141,8 @@ def output_peptide_data_for_reset(comet_map, casanovo_map, diamond_map, decoy_pr
         comet_best_score = comet_data.get('e-value', 0)
         comet_ppm_error = comet_data.get('mz_ppm_error', 0)
 
+        combined_rank_score = 4 - comet_data.get('rank_score', 2) - casanovo_data.get('rank_score', 2)
+
         ssequence = diamond_data.get('ssequence')
         if ssequence is None:
             raise ValueError(f"Peptide {peptide} does not have an 'ssequence' property")
@@ -150,7 +152,7 @@ def output_peptide_data_for_reset(comet_map, casanovo_map, diamond_map, decoy_pr
         row = [
             spec_id, label, scan_nr, database_peptide_length, diamond_bitscore, diamond_perc_identity,
             casanovo_num_spectra, casanovo_best_score, casanovo_ppm_error,
-            comet_num_spectra, comet_n_tryptic, comet_c_tryptic, comet_best_score, comet_ppm_error
+            comet_num_spectra, comet_n_tryptic, comet_c_tryptic, comet_best_score, comet_ppm_error, combined_rank_score
         ]
 
         for charge in casanovo_charges:
