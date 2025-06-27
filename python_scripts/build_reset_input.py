@@ -141,7 +141,7 @@ def output_peptide_data_for_reset(comet_map, casanovo_map, diamond_map, decoy_pr
         comet_best_score = comet_data.get('e-value', 0)
         comet_ppm_error = comet_data.get('mz_ppm_error', 0)
 
-        combined_rank_score = 4 - comet_data.get('rank_score', 2) - casanovo_data.get('rank_score', 2)
+        combined_rank_score = str(4 - float(comet_data.get('rank_score', 2)) - float(casanovo_data.get('rank_score', 2)))
 
         ssequence = diamond_data.get('ssequence')
         if ssequence is None:
