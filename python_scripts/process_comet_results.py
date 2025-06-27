@@ -18,7 +18,7 @@ DELTA_MASS_13C = 1.003355
 def is_n_tryptic(modified_peptide):
     return 1 if modified_peptide.startswith(('R', 'K', '-')) else 0
 
-def is_c_tryptic(plain_peptide):
+def is_c_tryptic(plain_peptide, modified_peptide):
     return 1 if (plain_peptide.endswith(('R', 'K')) or modified_peptide.endswith('-')) else 0
 
 def calculate_mz(neutral_mass, charge):
@@ -91,7 +91,7 @@ def process_files(file_paths, decoy_prefix):
                         'protein': protein,
                         'file': file_path,
                         'tryptic_n': is_n_tryptic(modified_peptide),
-                        'tryptic_c': is_c_tryptic(plain_peptide),
+                        'tryptic_c': is_c_tryptic(plain_peptide, modified_peptide),
                         'mz_ppm_error': calculate_error_ppm(calc_mz, exp_mz, charge),
                         'is_decoy': int(is_decoy(protein, decoy_prefix))
                     }
