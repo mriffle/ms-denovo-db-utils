@@ -16,10 +16,10 @@ MASS_OF_PROTON = 1.00727647
 DELTA_MASS_13C = 1.003355
 
 def is_n_tryptic(modified_peptide):
-    return 1 if modified_peptide.startswith(('R', 'K')) else 0
+    return 1 if modified_peptide.startswith(('R', 'K', '-')) else 0
 
 def is_c_tryptic(plain_peptide):
-    return 1 if plain_peptide.endswith(('R', 'K')) else 0
+    return 1 if (plain_peptide.endswith(('R', 'K')) or modified_peptide.endswith('-')) else 0
 
 def calculate_mz(neutral_mass, charge):
     return (neutral_mass + (charge * MASS_OF_PROTON)) / charge
