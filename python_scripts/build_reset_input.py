@@ -99,7 +99,7 @@ def output_peptide_data_for_reset(comet_map, casanovo_map, diamond_map, decoy_pr
     missing_peptides = peptides - set(diamond_map.keys())
 
     if missing_peptides:
-        warning_message = "Warning: The following peptides are missing from diamond_map and will be skipped: " + ", ".join(missing_peptides)
+        warning_message = f"Warning: The following {len(missing_peptides)} peptides are missing from diamond_map and will be skipped: " + ", ".join(missing_peptides)
         print(warning_message, file=sys.stderr)
 
     casanovo_charges = set(data['charge'] for data in casanovo_map.values())
