@@ -111,8 +111,8 @@ def output_peptide_data_for_reset(comet_map, casanovo_map, diamond_map, decoy_pr
         "comet_num_spectra", "comet_n_tryptic", "comet_c_tryptic", "comet_best_score", "comet_ppm_error", "comet_num_peptidoforms",
         "combined_rank_score"
     ]
-    header.extend(f"casanovo_charge{charge}" for charge in casanovo_charges)
-    header.extend(f"comet_charge{charge}" for charge in comet_charges)
+    # header.extend(f"casanovo_charge{charge}" for charge in casanovo_charges)
+    # header.extend(f"comet_charge{charge}" for charge in comet_charges)
     header.extend(["Peptide", "Proteins"])
     print("\t".join(header))
 
@@ -159,11 +159,11 @@ def output_peptide_data_for_reset(comet_map, casanovo_map, diamond_map, decoy_pr
             combined_rank_score
         ]
 
-        for charge in casanovo_charges:
-            row.append(1 if casanovo_data.get('charge') == charge else 0)
+        # for charge in casanovo_charges:
+        #     row.append(1 if casanovo_data.get('charge') == charge else 0)
 
-        for charge in comet_charges:
-            row.append(1 if comet_data.get('charge') == charge else 0)
+        # for charge in comet_charges:
+        #     row.append(1 if comet_data.get('charge') == charge else 0)
 
         row.extend([ssequence, proteins])
 
