@@ -107,8 +107,9 @@ def output_peptide_data_for_reset(comet_map, casanovo_map, diamond_map, decoy_pr
 
     header = [
         "SpecId", "Label", "ScanNr", "database_peptide_length", "diamond_bitscore", "diamond_perc_identity",
-        "casanovo_num_spectra", "casanovo_best_score", "casanovo_ppm_error",
-        "comet_num_spectra", "comet_n_tryptic", "comet_c_tryptic", "comet_best_score", "comet_ppm_error", "combined_rank_score"
+        "casanovo_num_spectra", "casanovo_best_score", "casanovo_ppm_error", "casanovo_num_peptidoforms",
+        "comet_num_spectra", "comet_n_tryptic", "comet_c_tryptic", "comet_best_score", "comet_ppm_error", "comet_num_peptidoforms",
+        "combined_rank_score"
     ]
     header.extend(f"casanovo_charge{charge}" for charge in casanovo_charges)
     header.extend(f"comet_charge{charge}" for charge in comet_charges)
@@ -134,12 +135,14 @@ def output_peptide_data_for_reset(comet_map, casanovo_map, diamond_map, decoy_pr
         casanovo_num_spectra = casanovo_data.get('num_spectra', 0)
         casanovo_best_score = casanovo_data.get('search_engine_score[1]', 0)
         casanovo_ppm_error = casanovo_data.get('mz_ppm_error', 0)
+        casanovo_num_peptidoforms = casanovo_data.get('num_peptidoforms', 0)
 
         comet_num_spectra = comet_data.get('num_spectra', 0)
         comet_n_tryptic = comet_data.get('tryptic_n', 0)
         comet_c_tryptic = comet_data.get('tryptic_c', 0)
         comet_best_score = comet_data.get('e-value', 0)
         comet_ppm_error = comet_data.get('mz_ppm_error', 0)
+        comet_num_peptidoforms = comet_data.get('num_peptidoforms', 0)
 
         combined_rank_score = str(4 - float(comet_data.get('rank_score', 2)) - float(casanovo_data.get('rank_score', 2)))
 
@@ -151,8 +154,9 @@ def output_peptide_data_for_reset(comet_map, casanovo_map, diamond_map, decoy_pr
 
         row = [
             spec_id, label, scan_nr, database_peptide_length, diamond_bitscore, diamond_perc_identity,
-            casanovo_num_spectra, casanovo_best_score, casanovo_ppm_error,
-            comet_num_spectra, comet_n_tryptic, comet_c_tryptic, comet_best_score, comet_ppm_error, combined_rank_score
+            casanovo_num_spectra, casanovo_best_score, casanovo_ppm_error, casanovo_num_peptidoforms
+            comet_num_spectra, comet_n_tryptic, comet_c_tryptic, comet_best_score, comet_ppm_error, comet_num_peptidoforms
+            combined_rank_score
         ]
 
         for charge in casanovo_charges:

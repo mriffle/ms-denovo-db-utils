@@ -51,6 +51,8 @@ def add_rank_score_to_peptide_data(peptide_data):
 def process_files(file_paths):
     peptide_data = {}
     peptide_counts = {}
+    peptide_peptidoforms = {}
+
     for file_path in file_paths:
         with open(file_path, 'r') as file:
             reader = csv.reader(file, delimiter='\t')
@@ -80,6 +82,7 @@ def process_files(file_paths):
                 if not row[0].startswith('PSM'):
                     continue
 
+                peptidoform_sequence = row[sequence_index]
                 sequence = re.sub(r'[^A-Z]', '', row[sequence_index])
                 charge = int(float(row[charge_index]))
                 score = float(row[score_index])
@@ -96,6 +99,12 @@ def process_files(file_paths):
                 # Count the number of occurrences of each peptide sequence
                 peptide_counts[sequence] = peptide_counts.get(sequence, 0) + 1
 
+                # add this peptidoform to the set of peptidoforms for this peptide
+                if sequence not in peptide_peptidoforms:
+                    peptide_peptidoforms[sequence] = set()
+                
+                peptide_peptidoforms[sequence].add(peptidoform_sequence)
+
                 if sequence not in peptide_data or score > peptide_data[sequence]['score']:
                     peptide_data[sequence] = {
                         'charge': charge,
@@ -111,9 +120,9 @@ def process_files(file_paths):
     add_rank_score_to_peptide_data(peptide_data)
 
     # Output the results
-    print("peptide_sequence\tcharge\tsearch_engine_score[1]\tfile\tmz_ppm_error\tnum_spectra\trank_score")
+    print("peptide_sequence\tcharge\tsearch_engine_score[1]\tfile\tmz_ppm_error\tnum_spectra\trank_score\tnum_peptidoforms")
     for peptide, data in peptide_data.items():
-        print(f"{peptide}\t{data['charge']}\t{data['score']}\t{data['file']}\t{data['mz_ppm_error']:.2f}\t{data['num_spectra']}\t{data['rank_score']}")
+        print(f"{peptide}\t{data['charge']}\t{data['score']}\t{data['file']}\t{data['mz_ppm_error']:.2f}\t{data['num_spectra']}\t{data['rank_score']}\t{len(peptide_peptidoforms[peptide])}")
 
 def main():
     """
