@@ -103,7 +103,7 @@ def process_files(file_paths):
                 if sequence not in peptide_peptidoforms:
                     peptide_peptidoforms[sequence] = set()
                 
-                peptide_peptidoforms[sequence].add(peptidoform_sequence)
+                peptide_peptidoforms[sequence].add(peptidoform_sequence + '-' + str(charge))
 
                 if sequence not in peptide_data or score > peptide_data[sequence]['score']:
                     peptide_data[sequence] = {

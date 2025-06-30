@@ -111,7 +111,7 @@ def process_files(file_paths, decoy_prefix):
                 if plain_peptide not in peptide_peptidoforms:
                     peptide_peptidoforms[plain_peptide] = set()
                 
-                peptide_peptidoforms[plain_peptide].add(modified_peptide)
+                peptide_peptidoforms[plain_peptide].add(modified_peptide + '-' + str(charge))
 
                 if plain_peptide not in peptide_data or e_value < peptide_data[plain_peptide]['e_value']:
                     peptide_data[plain_peptide] = {
