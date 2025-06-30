@@ -154,8 +154,8 @@ def output_peptide_data_for_reset(comet_map, casanovo_map, diamond_map, decoy_pr
 
         row = [
             spec_id, label, scan_nr, database_peptide_length, diamond_bitscore, diamond_perc_identity,
-            casanovo_num_spectra, casanovo_best_score, casanovo_ppm_error, casanovo_num_peptidoforms
-            comet_num_spectra, comet_n_tryptic, comet_c_tryptic, comet_best_score, comet_ppm_error, comet_num_peptidoforms
+            casanovo_num_spectra, casanovo_best_score, casanovo_ppm_error, casanovo_num_peptidoforms,
+            comet_num_spectra, comet_n_tryptic, comet_c_tryptic, comet_best_score, comet_ppm_error, comet_num_peptidoforms,
             combined_rank_score
         ]
 
