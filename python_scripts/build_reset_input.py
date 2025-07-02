@@ -94,6 +94,37 @@ def augment_peptide_map(peptide_map, fasta_file_path):
 
     return peptide_map
 
+def build_diamond_hit_query_sequence_map(peptides, diamond_map):
+    """
+    Build a dict mapping library_peptide_sequence to the set of
+    casanovo/comet peptides that mapped to that library hit.
+
+    Parameters:
+        peptides (iterable): List or iterable of peptide strings to process.
+        diamond_map (dict): Mapping from peptide => diamond_data dict.
+
+    Returns:
+        dict: {ssequence => set of peptides}
+    """
+    diamond_hit_query_sequence_map = {}
+
+    for peptide in peptides:
+        if peptide not in diamond_map:
+            continue
+
+        diamond_data = diamond_map[peptide]
+
+        ssequence = diamond_data.get('ssequence')
+        if ssequence is None:
+            raise ValueError(f"Peptide {peptide} does not have an 'ssequence' property")
+        
+        if ssequence not in diamond_hit_query_sequence_map:
+            diamond_hit_query_sequence_map[ssequence] = set()
+        
+        diamond_hit_query_sequence_map[ssequence].add(peptide)
+
+    return diamond_hit_query_sequence_map
+
 def output_peptide_data_for_reset(comet_map, casanovo_map, diamond_map, decoy_prefix):
     peptides = set(comet_map.keys()) | set(casanovo_map.keys())
     missing_peptides = peptides - set(diamond_map.keys())
@@ -102,73 +133,115 @@ def output_peptide_data_for_reset(comet_map, casanovo_map, diamond_map, decoy_pr
         warning_message = f"Warning: The following {len(missing_peptides)} peptides are missing from diamond_map and will be skipped: " + ", ".join(missing_peptides)
         print(warning_message, file=sys.stderr)
 
-    casanovo_charges = set(data['charge'] for data in casanovo_map.values())
-    comet_charges = set(data['charge'] for data in comet_map.values())
+    # create a dict of { library_peptide_sequence => set(casanovo/comet
+    # peptides that mapped to that library hit) }
+    diamond_hit_query_sequence_map = build_diamond_hit_query_sequence_map(peptides, diamond_map)
 
     header = [
-        "SpecId", "Label", "ScanNr", "database_peptide_length", "diamond_bitscore", "diamond_perc_identity",
+        "SpecId", "Label", "ScanNr",
+        "database_peptide_length", "max_diamond_bitscore", "max_diamond_perc_identity", "num_casanovo_peptides", "num_comet_peptides",
         "casanovo_num_spectra", "casanovo_best_score", "casanovo_ppm_error", "casanovo_num_peptidoforms",
         "comet_num_spectra", "comet_n_tryptic", "comet_c_tryptic", "comet_best_score", "comet_ppm_error", "comet_num_peptidoforms",
         "combined_rank_score"
     ]
-    # header.extend(f"casanovo_charge{charge}" for charge in casanovo_charges)
-    # header.extend(f"comet_charge{charge}" for charge in comet_charges)
+
     header.extend(["Peptide", "Proteins"])
     print("\t".join(header))
 
     scan_nr = 1
-    for peptide in peptides:
-        if peptide not in diamond_map:
-            continue
 
-        diamond_data = diamond_map[peptide]
-        casanovo_data = casanovo_map.get(peptide, {})
-        comet_data = comet_map.get(peptide, {})
+    # iterate over annotated diamond hit peptides, each is a row in RESET input
+    for library_hit_peptide, casanovo_comet_search_peptides in diamond_hit_query_sequence_map.items():
+        
+        # best diamond hit data
+        best_diamond_peptide_length = 0
+        best_diamond_bit_score = 0
+        best_diamond_perc_identity = 0
+        best_diamond_label = 1
+        best_diamond_ssequence = ''
+        best_diamond_protein = ''
 
-        spec_id = peptide + '_1'
-        label = -1 if diamond_data.get('sseqid', '').startswith(decoy_prefix) or comet_data.get('is_decoy') == '1' else 1
+        # best casanovo hit data
+        casanovo_num_spectra = 0
+        casanovo_num_peptides = 0
+        casanovo_best_score = 0
+        casanovo_ppm_error = 0
+        casanovo_num_peptidoforms = 0
+        casanovo_best_rank_score = 2
 
-        database_peptide_length = int(diamond_data.get('send', 0)) - int(diamond_data.get('sstart', 0)) + 1
-        diamond_bitscore = diamond_data.get('bitscore', 0)
-        diamond_perc_identity = diamond_data.get('pident', 0)
+        # best comet hit data
+        comet_num_spectra = 0
+        comet_num_peptides = 0
+        comet_n_tryptic = 0
+        comet_c_tryptic = 0
+        comet_best_score = 0
+        comet_ppm_error = 0
+        comet_num_peptidoforms = 0
+        comet_best_rank_score = 2
 
-        casanovo_num_spectra = casanovo_data.get('num_spectra', 0)
-        casanovo_best_score = casanovo_data.get('search_engine_score[1]', 0)
-        casanovo_ppm_error = casanovo_data.get('mz_ppm_error', 0)
-        casanovo_num_peptidoforms = casanovo_data.get('num_peptidoforms', 0)
+        for peptide in casanovo_comet_search_peptides:
+            diamond_data = diamond_map[peptide]
+            casanovo_data = casanovo_map.get(peptide, {})
+            comet_data = comet_map.get(peptide, {})
+        
+            # check for best diamond hit
+            diamond_bitscore = diamond_data.get('bitscore', 0)
+            if diamond_bitscore > best_diamond_bit_score:
+                database_peptide_length = int(diamond_data.get('send', 0)) - int(diamond_data.get('sstart', 0)) + 1
 
-        comet_num_spectra = comet_data.get('num_spectra', 0)
-        comet_n_tryptic = comet_data.get('tryptic_n', 0)
-        comet_c_tryptic = comet_data.get('tryptic_c', 0)
-        comet_best_score = comet_data.get('e-value', 0)
-        comet_ppm_error = comet_data.get('mz_ppm_error', 0)
-        comet_num_peptidoforms = comet_data.get('num_peptidoforms', 0)
+                best_diamond_bit_score = diamond_bitscore
+                best_diamond_peptide_length = database_peptide_length
+                best_diamond_perc_identity = diamond_data.get('pident', 0)
+                best_diamond_label = -1 if diamond_data.get('sseqid', '').startswith(decoy_prefix) else 1
+                best_diamond_ssequence = diamond_data.get('ssequence')
+                best_diamond_protein = diamond_data.get('sseqid', '')
 
-        combined_rank_score = str(4 - float(comet_data.get('rank_score', 2)) - float(casanovo_data.get('rank_score', 2)))
+            # add in casanovo data
+            if len(casanovo_data) > 0:
 
-        ssequence = diamond_data.get('ssequence')
-        if ssequence is None:
-            raise ValueError(f"Peptide {peptide} does not have an 'ssequence' property")
+                casanovo_num_spectra += int(casanovo_data.get('num_spectra'))
+                casanovo_num_peptidoforms += int(casanovo_data.get('num_peptidoforms'))
+                casanovo_num_peptides += 1
 
-        proteins = diamond_data.get('sseqid', '')
+                # check for best casanovo hit
+                casanovo_score = casanovo_data.get('search_engine_score[1]')
+                if casanovo_score > casanovo_best_score:
+                    casanovo_best_score = casanovo_score
+                    casanovo_ppm_error = casanovo_data.get('mz_ppm_error')
+                    casanovo_best_rank_score = casanovo_data.get('rank_score')
 
+            # add in comet data
+            if len(comet_data) > 0:
+
+                comet_num_spectra += int(comet_data.get('num_spectra'))
+                comet_num_peptidoforms += int(comet_data.get('num_peptidoforms'))
+                comet_num_peptides += 1
+
+                # check for best comet hit
+                comet_score = float(comet_data.get('e-value')) * -1
+                if comet_score > comet_best_score:
+                    comet_best_score = comet_score
+                    comet_ppm_error = comet_data.get('mz_ppm_error')
+                    comet_best_rank_score = comet_data.get('rank_score')
+                    comet_n_tryptic = comet_data.get('tryptic_n')
+                    comet_c_tryptic = comet_data.get('tryptic_c')
+        
+
+        spec_id = library_hit_peptide + '_1'
+        combined_rank_score = str(4 - float(comet_best_rank_score) - float(casanovo_best_rank_score))
+        
         row = [
-            spec_id, label, scan_nr, database_peptide_length, diamond_bitscore, diamond_perc_identity,
+            spec_id, best_diamond_label, scan_nr, best_diamond_peptide_length, best_diamond_bit_score, best_diamond_perc_identity,
+            casanovo_num_peptides, casanovo_num_peptides,
             casanovo_num_spectra, casanovo_best_score, casanovo_ppm_error, casanovo_num_peptidoforms,
             comet_num_spectra, comet_n_tryptic, comet_c_tryptic, comet_best_score, comet_ppm_error, comet_num_peptidoforms,
-            combined_rank_score
+            combined_rank_score,
+            library_hit_peptide, best_diamond_protein
         ]
-
-        # for charge in casanovo_charges:
-        #     row.append(1 if casanovo_data.get('charge') == charge else 0)
-
-        # for charge in comet_charges:
-        #     row.append(1 if comet_data.get('charge') == charge else 0)
-
-        row.extend([ssequence, proteins])
 
         print("\t".join(str(value) for value in row))
         scan_nr += 1
+
 
 if __name__ == "__main__":
     if len(sys.argv) != 6:
