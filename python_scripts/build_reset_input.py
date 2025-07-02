@@ -185,7 +185,7 @@ def output_peptide_data_for_reset(comet_map, casanovo_map, diamond_map, decoy_pr
             comet_data = comet_map.get(peptide, {})
         
             # check for best diamond hit
-            diamond_bitscore = diamond_data.get('bitscore', 0)
+            diamond_bitscore = float(diamond_data.get('bitscore', 0))
             if diamond_bitscore > best_diamond_bit_score:
                 database_peptide_length = int(diamond_data.get('send', 0)) - int(diamond_data.get('sstart', 0)) + 1
 
@@ -204,7 +204,7 @@ def output_peptide_data_for_reset(comet_map, casanovo_map, diamond_map, decoy_pr
                 casanovo_num_peptides += 1
 
                 # check for best casanovo hit
-                casanovo_score = casanovo_data.get('search_engine_score[1]')
+                casanovo_score = float(casanovo_data.get('search_engine_score[1]'))
                 if casanovo_score > casanovo_best_score:
                     casanovo_best_score = casanovo_score
                     casanovo_ppm_error = casanovo_data.get('mz_ppm_error')
