@@ -218,7 +218,7 @@ def output_peptide_data_for_reset(comet_map, casanovo_map, diamond_map, decoy_pr
                 comet_num_peptides += 1
 
                 # check for best comet hit
-                comet_score = float(comet_data.get('xcorr'))
+                comet_score = 1 / (float(comet_data.get('e-value')) + 1E-10)
                 if comet_score > comet_best_score:
                     comet_best_score = comet_score
                     comet_ppm_error = comet_data.get('mz_ppm_error')
