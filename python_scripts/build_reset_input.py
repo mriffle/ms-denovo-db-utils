@@ -1,5 +1,6 @@
 import os
 import sys
+import math
 
 def read_peptide_file(file_path):
     peptide_map = {}
@@ -218,7 +219,7 @@ def output_peptide_data_for_reset(comet_map, casanovo_map, diamond_map, decoy_pr
                 comet_num_peptides += 1
 
                 # check for best comet hit
-                comet_score = 1 / (float(comet_data.get('e-value')) + 1E-10)
+                comet_score = math.log10(1 + (1 / (float(comet_data.get('e-value')) + 1E-20)))
                 if comet_score > comet_best_score:
                     comet_best_score = comet_score
                     comet_ppm_error = comet_data.get('mz_ppm_error')
