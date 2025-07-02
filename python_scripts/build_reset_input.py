@@ -16,13 +16,14 @@ def read_peptide_file(file_path):
 
     return peptide_map
 
-def read_diamond_file(file_path):
+def read_diamond_file(file_path, decoy_prefix):
     """Read Diamond results in outfmt 6 format"""
     column_headers = [
         'qseqid', 'sseqid', 'pident', 'length', 'mismatch', 'gapopen', 
         'qstart', 'qend', 'sstart', 'send', 'evalue', 'bitscore'
     ]
     peptide_map = {}
+    peptide_protein_map = {}
 
     with open(file_path, 'r') as file:
         for line_num, line in enumerate(file, start=1):
@@ -38,7 +39,8 @@ def read_diamond_file(file_path):
 
             # In Diamond format, qseqid is the query (peptide sequence)
             peptide_sequence = columns[0]
-            
+            protein_name = columns[1]
+
             # Create data dictionary with all the alignment information
             peptide_data = {column_headers[i]: columns[i] for i in range(len(column_headers))}
             
@@ -48,10 +50,24 @@ def read_diamond_file(file_path):
                 new_evalue = float(peptide_data['evalue'])
                 if new_evalue < existing_evalue:
                     peptide_map[peptide_sequence] = peptide_data
+                    peptide_protein_map[peptide_sequence] = set()
             else:
                 peptide_map[peptide_sequence] = peptide_data
+                peptide_protein_map[peptide_sequence] = set()
 
-    return peptide_map
+            peptide_protein_map[peptide_sequence].add(protein_name)
+        
+    peptides_to_remove = set()
+    for peptide in peptide_protein_map:
+        any_starts_with_decoy = any(s.startswith(decoy_prefix) for s in peptide_protein_map[peptide])
+        any_not_starts_with_decoy = any(not s.startswith(decoy_prefix) for s in peptide_protein_map[peptide])
+
+        if any_starts_with_decoy and any_not_starts_with_decoy:
+            peptides_to_remove.add(peptide)
+
+    filtered_peptide_map = {k: v for k, v in peptide_map.items() if k not in peptides_to_remove}
+
+    return filtered_peptide_map
 
 def augment_peptide_map(peptide_map, fasta_file_path):
     """Extract subject sequences from FASTA file based on Diamond alignment coordinates"""
@@ -153,7 +169,7 @@ def output_peptide_data_for_reset(comet_map, casanovo_map, diamond_map, decoy_pr
 
     # iterate over annotated diamond hit peptides, each is a row in RESET input
     for library_hit_peptide, casanovo_comet_search_peptides in diamond_hit_query_sequence_map.items():
-        
+
         # best diamond hit data
         best_diamond_peptide_length = 0
         best_diamond_bit_score = 0
@@ -257,7 +273,7 @@ if __name__ == "__main__":
 
     comet_map = read_peptide_file(comet_results_file)
     casanovo_map = read_peptide_file(casanovo_results_file)
-    diamond_map = read_diamond_file(diamond_results_file)
+    diamond_map = read_diamond_file(diamond_results_file, decoy_prefix)
     diamond_map = augment_peptide_map(diamond_map, fasta_file)
 
     output_peptide_data_for_reset(comet_map, casanovo_map, diamond_map, decoy_prefix)
