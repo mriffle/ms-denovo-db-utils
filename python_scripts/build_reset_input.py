@@ -69,6 +69,8 @@ def read_diamond_file(file_path, decoy_prefix):
 
     return filtered_peptide_map
 
+import gzip
+
 def augment_peptide_map(peptide_map, fasta_file_path):
     """Extract subject sequences from FASTA file based on Diamond alignment coordinates"""
     protein_peptide_map = {}
@@ -78,7 +80,13 @@ def augment_peptide_map(peptide_map, fasta_file_path):
             protein_peptide_map[protein_name] = []
         protein_peptide_map[protein_name].append(peptide)
 
-    with open(fasta_file_path, 'r') as fasta_file:
+    # Check if file is gzipped and open accordingly
+    if fasta_file_path.endswith('.gz'):
+        fasta_file = gzip.open(fasta_file_path, 'rt')
+    else:
+        fasta_file = open(fasta_file_path, 'r')
+    
+    try:
         protein_name = None
         protein_sequence = ''
 
@@ -104,6 +112,9 @@ def augment_peptide_map(peptide_map, fasta_file_path):
                 end = int(peptide_map[peptide]['send'])
                 subject_sequence = protein_sequence[start:end]
                 peptide_map[peptide]['ssequence'] = subject_sequence
+    
+    finally:
+        fasta_file.close()
 
     for peptide, data in peptide_map.items():
         if 'ssequence' not in data:
