@@ -154,7 +154,7 @@ def build_diamond_hit_query_sequence_map(peptides, diamond_map):
 
     return diamond_hit_query_sequence_map
 
-def output_peptide_data_for_reset(comet_map, casanovo_map, diamond_map, library_decoy_prefix, comet_decoy_prefix):
+def output_peptide_data_for_reset(comet_map, casanovo_map, diamond_map, library_decoy_prefix):
     peptides = set(comet_map.keys()) | set(casanovo_map.keys())
     missing_peptides = peptides - set(diamond_map.keys())
 
