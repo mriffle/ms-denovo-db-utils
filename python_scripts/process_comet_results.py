@@ -131,9 +131,8 @@ def process_files(file_paths, decoy_prefix):
     # Output the results
     print("plain_peptide\tcharge\te-value\tprotein\tfile\ttryptic_n\ttryptic_c\tnum_spectra\tmz_ppm_error\tis_decoy\tproteins\trank_score\tnum_peptidoforms")
     for peptide, data in peptide_data.items():
-        if data['is_decoy'] == 0:
-            num_spectra = peptide_counts[peptide]
-            print(f"{peptide}\t{data['charge']}\t{data['e_value']}\t{data['protein']}\t{data['file']}\t{data['tryptic_n']}\t{data['tryptic_c']}\t{num_spectra}\t{data['mz_ppm_error']:.2f}\t{data['is_decoy']}\t{data['protein']}\t{data['rank_score']}\t{len(peptide_peptidoforms[peptide])}")
+        num_spectra = peptide_counts[peptide]
+        print(f"{peptide}\t{data['charge']}\t{data['e_value']}\t{data['protein']}\t{data['file']}\t{data['tryptic_n']}\t{data['tryptic_c']}\t{num_spectra}\t{data['mz_ppm_error']:.2f}\t{data['is_decoy']}\t{data['protein']}\t{data['rank_score']}\t{len(peptide_peptidoforms[peptide])}")
 
 def main():
     # Set up command-line argument parsing

@@ -16,7 +16,7 @@ def read_peptide_file(file_path):
 
     return peptide_map
 
-def read_diamond_file(file_path, decoy_prefix):
+def read_diamond_file(file_path, library_decoy_prefix):
     """Read Diamond results in outfmt 6 format"""
     column_headers = [
         'qseqid', 'sseqid', 'pident', 'length', 'mismatch', 'gapopen', 
@@ -57,10 +57,11 @@ def read_diamond_file(file_path, decoy_prefix):
 
             peptide_protein_map[peptide_sequence].add(protein_name)
         
+    # remove peptides that map to both decoys and non decoys in the annotated db search
     peptides_to_remove = set()
     for peptide in peptide_protein_map:
-        any_starts_with_decoy = any(s.startswith(decoy_prefix) for s in peptide_protein_map[peptide])
-        any_not_starts_with_decoy = any(not s.startswith(decoy_prefix) for s in peptide_protein_map[peptide])
+        any_starts_with_decoy = any(s.startswith(library_decoy_prefix) for s in peptide_protein_map[peptide])
+        any_not_starts_with_decoy = any(not s.startswith(library_decoy_prefix) for s in peptide_protein_map[peptide])
 
         if any_starts_with_decoy and any_not_starts_with_decoy:
             peptides_to_remove.add(peptide)
@@ -153,7 +154,7 @@ def build_diamond_hit_query_sequence_map(peptides, diamond_map):
 
     return diamond_hit_query_sequence_map
 
-def output_peptide_data_for_reset(comet_map, casanovo_map, diamond_map, decoy_prefix):
+def output_peptide_data_for_reset(comet_map, casanovo_map, diamond_map, library_decoy_prefix, comet_decoy_prefix):
     peptides = set(comet_map.keys()) | set(casanovo_map.keys())
     missing_peptides = peptides - set(diamond_map.keys())
 
@@ -206,6 +207,7 @@ def output_peptide_data_for_reset(comet_map, casanovo_map, diamond_map, decoy_pr
         comet_ppm_error = 0
         comet_num_peptidoforms = 0
         comet_best_rank_score = 2
+        comet_best_is_decoy = False
 
         for peptide in casanovo_comet_search_peptides:
             diamond_data = diamond_map[peptide]
@@ -220,7 +222,7 @@ def output_peptide_data_for_reset(comet_map, casanovo_map, diamond_map, decoy_pr
                 best_diamond_bit_score = diamond_bitscore
                 best_diamond_peptide_length = database_peptide_length
                 best_diamond_perc_identity = diamond_data.get('pident', 0)
-                best_diamond_label = -1 if diamond_data.get('sseqid', '').startswith(decoy_prefix) else 1
+                best_diamond_label = -1 if diamond_data.get('sseqid', '').startswith(library_decoy_prefix) else 1
                 best_diamond_ssequence = diamond_data.get('ssequence')
                 best_diamond_protein = diamond_data.get('sseqid', '')
 
@@ -241,19 +243,36 @@ def output_peptide_data_for_reset(comet_map, casanovo_map, diamond_map, decoy_pr
             # add in comet data
             if len(comet_data) > 0:
 
-                comet_num_spectra += int(comet_data.get('num_spectra'))
-                comet_num_peptidoforms += int(comet_data.get('num_peptidoforms'))
-                comet_num_peptides += 1
+                # skip this comet hit if it's a decoy hit hitting a target library hit
+                comet_is_decoy = comet_data.get('is_decoy') == '1'
 
-                # check for best comet hit
-                comet_score = math.log10(1 + (1 / (float(comet_data.get('e-value')) + 1E-20)))
-                if comet_score > comet_best_score:
-                    comet_best_score = comet_score
-                    comet_ppm_error = comet_data.get('mz_ppm_error')
-                    comet_best_rank_score = comet_data.get('rank_score')
-                    comet_n_tryptic = comet_data.get('tryptic_n')
-                    comet_c_tryptic = comet_data.get('tryptic_c')
-        
+                if comet_is_decoy and best_diamond_label == 1:
+                    warning_message = f"Warning: Ignoring decoy comet hit for {peptide} that matched target in library: {best_diamond_protein}"
+                    print(warning_message, file=sys.stderr)
+                
+                else:
+                    comet_num_spectra += int(comet_data.get('num_spectra'))
+                    comet_num_peptidoforms += int(comet_data.get('num_peptidoforms'))
+                    comet_num_peptides += 1
+
+                    # check for best comet hit
+                    comet_score = math.log10(1 + (1 / (float(comet_data.get('e-value')) + 1E-20)))
+                    if comet_score > comet_best_score:
+                        comet_best_score = comet_score
+                        comet_ppm_error = comet_data.get('mz_ppm_error')
+                        comet_best_rank_score = comet_data.get('rank_score')
+                        comet_n_tryptic = comet_data.get('tryptic_n')
+                        comet_c_tryptic = comet_data.get('tryptic_c')
+                        comet_best_is_decoy = comet_is_decoy
+                
+
+        # skip this row if there were no casanovo and no comet hits (after filtering out decoys that matched library targets)
+        if casanovo_num_spectra == 0 and comet_num_spectra == 0:
+            continue
+
+        # sanity check that the best comet hit is never a decoy matching a annotated db target
+        if comet_best_is_decoy and best_diamond_label == 1:
+             raise ValueError(f"Found situation where best comet hit is a decoy and best diamond hit is a target, stopping.")
 
         spec_id = library_hit_peptide + '_1'
         combined_rank_score = str(4 - float(comet_best_rank_score) - float(casanovo_best_rank_score))
@@ -272,19 +291,20 @@ def output_peptide_data_for_reset(comet_map, casanovo_map, diamond_map, decoy_pr
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 6:
-        print("Usage: python build_reset_input.py <comet_results_file> <casanovo_results_file> <diamond_results_file> <fasta_file> <decoy_prefix>")
+    if len(sys.argv) != 7:
+        print("Usage: python build_reset_input.py <comet_results_file> <casanovo_results_file> <diamond_results_file> <fasta_file> <annotated db decoy prefix> <comet decoy prefix>")
         sys.exit(1)
 
     comet_results_file = sys.argv[1]
     casanovo_results_file = sys.argv[2]
     diamond_results_file = sys.argv[3]
     fasta_file = sys.argv[4]
-    decoy_prefix = sys.argv[5]
+    library_decoy_prefix = sys.argv[5]
+    comet_decoy_prefix = sys.argv[6]
 
     comet_map = read_peptide_file(comet_results_file)
     casanovo_map = read_peptide_file(casanovo_results_file)
-    diamond_map = read_diamond_file(diamond_results_file, decoy_prefix)
+    diamond_map = read_diamond_file(diamond_results_file, library_decoy_prefix)
     diamond_map = augment_peptide_map(diamond_map, fasta_file)
 
-    output_peptide_data_for_reset(comet_map, casanovo_map, diamond_map, decoy_prefix)
+    output_peptide_data_for_reset(comet_map, casanovo_map, diamond_map, library_decoy_prefix)
