@@ -65,11 +65,19 @@ def run_in_container(
         *,
         mounts: dict[Path, str] | None = None,
         workdir: str | None = None,
+        as_current_user: bool = False,
+        env: dict[str, str] | None = None,
         check: bool = False,
     ) -> subprocess.CompletedProcess[str]:
         command = ["docker", "run", "--rm"]
         for host_path, container_path in (mounts or {}).items():
             command += ["-v", f"{host_path.resolve()}:{container_path}"]
+        if as_current_user:
+            # Anything written into a mounted directory would otherwise be
+            # owned by root and defeat pytest's tmp_path cleanup.
+            command += ["-u", f"{os.getuid()}:{os.getgid()}"]
+        for name, value in (env or {}).items():
+            command += ["-e", f"{name}={value}"]
         if workdir is not None:
             command += ["-w", workdir]
         command.append(container_image)

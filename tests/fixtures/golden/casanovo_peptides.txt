@@ -1,0 +1,6 @@
+peptide_sequence	charge	search_engine_score[1]	file	mz_ppm_error	num_spectra	rank_score	num_peptidoforms
+SAMPLEPEPTIDER	2	0.9905	run2.mztab	0.90	4	0.4	3
+ANTHERPEPTIDEK	2	0.999	run1.mztab	0.80	1	0.2	1
+NOVELPEPTIDEK	2	0.75	run1.mztab	1.20	2	0.8	1
+SHAREDPEPTIDEK	2	0.7654	run1.mztab	-0.70	1	0.6	1
+UNMATCHEDPEPTK	2	0.55	run2.mztab	0.00	1	1.0	1

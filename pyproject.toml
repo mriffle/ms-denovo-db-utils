@@ -44,10 +44,6 @@ where = ["src"]
 target-version = "py310"
 line-length = 100
 src = ["src", "tests"]
-# PHASE 0 ONLY: the legacy flat scripts move into src/ in Phase 1 and this
-# exclusion is deleted with them. Linting code that is about to be rewritten
-# would be churn, but leaving it silently unlinted forever would not.
-extend-exclude = ["python_scripts"]
 
 [tool.ruff.lint]
 select = [
@@ -78,6 +74,7 @@ ignore = [
 "tests/**" = [
     "PLR2004",  # magic values are the entire point of an assertion
     "ARG001",   # pytest fixtures are often requested for side effects only
+    "PLR0913",  # test helpers legitimately take many keyword-only knobs
 ]
 
 [tool.ruff.lint.isort]
