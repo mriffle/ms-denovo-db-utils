@@ -1,0 +1,74 @@
+name: Release
+
+# Build-and-verify only. This repository is not linked to quay.io, so nothing
+# is published yet; see "Publishing" at the bottom for the step to add once a
+# robot account and secrets exist.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  verify:
+    name: Verify release build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+      - run: python -m pip install -e '.[dev]'
+
+      # Closes the traceability gap: today the image tag exists only as a string
+      # in nf-ms-denovo-db/container_images.config, with no matching git tag.
+      - name: Tag must match the declared version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          declared="$(python -c 'import ms_denovo_db_utils as m; print(m.__version__)')"
+          tagged="${GITHUB_REF_NAME#v}"
+          if [ "$declared" != "$tagged" ]; then
+            echo "::error::git tag $GITHUB_REF_NAME implies version '$tagged'," \
+                 "but the package declares '$declared'"
+            exit 1
+          fi
+          echo "version $declared matches tag $GITHUB_REF_NAME"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: ms-denovo-db-utils:dev
+          build-args: |
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ github.ref_name }}
+
+      - name: Container tests must pass on the release image
+        run: pytest -m docker
+
+      - name: Show image provenance labels
+        run: docker inspect --format '{{ json .Config.Labels }}' ms-denovo-db-utils:dev
+
+# Publishing
+# ----------
+# When quay.io is linked, add QUAY_USERNAME / QUAY_ROBOT_TOKEN as repository
+# secrets and append to this job:
+#
+#   - uses: docker/login-action@v3
+#     with:
+#       registry: quay.io
+#       username: ${{ secrets.QUAY_USERNAME }}
+#       password: ${{ secrets.QUAY_ROBOT_TOKEN }}
+#   - uses: docker/build-push-action@v6
+#     with:
+#       context: .
+#       push: true
+#       tags: quay.io/protio/ms-denovo-db-utils:${{ github.ref_name }}
+#
+# Then bump params.images.ms_denovo_db_utils in nf-ms-denovo-db.

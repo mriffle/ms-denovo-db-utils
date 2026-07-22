@@ -1,0 +1,126 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ms-denovo-db-utils"
+version = "1.2.0.dev0"
+description = "Result-processing utilities for the ms-denovo-db Nextflow pipeline"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "Michael Riffle", email = "mriffle@uw.edu" }]
+# Intentionally empty: these tools are pure standard library, which keeps the
+# container image trivial to build and immune to dependency rot.
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "mypy>=1.11",
+    "ruff>=0.6",
+    # tomllib is stdlib only from 3.11; 3.10 is the container interpreter.
+    "tomli>=2.0; python_version < '3.11'",
+]
+
+# Modern entry points. The Nextflow pipeline still invokes the scripts by their
+# absolute /usr/local/bin/*.py paths (see docker_bin/); these exist so it can
+# migrate to plain commands later without another image contract change.
+[project.scripts]
+process-comet-results = "ms_denovo_db_utils.cli.process_comet_results:main"
+process-casanovo-results = "ms_denovo_db_utils.cli.process_casanovo_results:main"
+collate-into-fasta = "ms_denovo_db_utils.cli.collate_into_fasta:main"
+build-reset-input = "ms_denovo_db_utils.cli.build_reset_input:main"
+generate-reverse-decoys = "ms_denovo_db_utils.cli.generate_reverse_decoys:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# ---------------------------------------------------------------------------
+# ruff
+# ---------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+src = ["src", "tests"]
+# PHASE 0 ONLY: the legacy flat scripts move into src/ in Phase 1 and this
+# exclusion is deleted with them. Linting code that is about to be rewritten
+# would be churn, but leaving it silently unlinted forever would not.
+extend-exclude = ["python_scripts"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # isort
+    "N",        # pep8-naming
+    "UP",       # pyupgrade
+    "B",        # flake8-bugbear
+    "A",        # flake8-builtins
+    "C4",       # flake8-comprehensions
+    "SIM",      # flake8-simplify
+    "RET",      # flake8-return
+    "PTH",      # flake8-use-pathlib
+    "ARG",      # flake8-unused-arguments
+    "PL",       # pylint
+    "TRY",      # tryceratops
+    "RUF",      # ruff-specific
+]
+ignore = [
+    # Message-in-raise is the right call for these CLIs: the text goes straight
+    # to a Nextflow .stderr file a human reads. Custom exception classes would
+    # add indirection with no reader benefit.
+    "TRY003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "PLR2004",  # magic values are the entire point of an assertion
+    "ARG001",   # pytest fixtures are often requested for side effects only
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["ms_denovo_db_utils"]
+
+# ---------------------------------------------------------------------------
+# mypy
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.10"
+files = ["src", "tests"]
+strict = true
+warn_unreachable = true
+pretty = true
+
+# Tests are held to the same strictness as src/: an unannotated test can
+# silently stop asserting what it claims to.
+
+[[tool.mypy.overrides]]
+# Only installed on the 3.10 leg (tomllib is stdlib from 3.11), so the import
+# is genuinely unresolvable on newer interpreters.
+module = "tomli"
+ignore_missing_imports = true
+
+# ---------------------------------------------------------------------------
+# pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "--strict-markers --strict-config -ra"
+markers = [
+    "docker: requires a working Docker daemon (deselect with -m 'not docker')",
+    "slow: performance guard; slower than a normal unit test",
+]
+
+[tool.coverage.run]
+source = ["ms_denovo_db_utils"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:"]
+# PHASE 0: no logic has moved into src/ yet, so there is nothing to cover.
+# Ratchets to 90 at the end of Phase 2, once the characterization suite lands.
+fail_under = 0
