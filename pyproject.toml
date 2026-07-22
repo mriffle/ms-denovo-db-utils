@@ -117,7 +117,11 @@ branch = true
 
 [tool.coverage.report]
 show_missing = true
-exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:"]
-# PHASE 0: no logic has moved into src/ yet, so there is nothing to cover.
-# Ratchets to 90 at the end of Phase 2, once the characterization suite lands.
-fail_under = 0
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    # Each CLI module's __main__ guard; the entry points are exercised through
+    # main() directly and end to end through the container.
+    'if __name__ == "__main__":',
+]
+fail_under = 95
