@@ -26,7 +26,9 @@ def format_fasta(sequences: Iterable[str]) -> Iterator[str]:
 
     DIAMOND carries the query name through to its output, so naming each entry
     after its sequence is what lets the results be joined back to the peptide.
+    Emitted in sorted order: the input is a set, and an unstable query order
+    would make the homology search results differ run to run for no reason.
     """
-    for sequence in sequences:
+    for sequence in sorted(sequences):
         yield f">{sequence}"
         yield sequence

@@ -14,12 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.canonical import (
-    basename_column,
-    canonical_fasta,
-    canonical_missing_warning,
-    canonical_reset_input,
-)
+from tests.canonical import basename_column
 
 pytestmark = pytest.mark.docker
 
@@ -65,9 +60,6 @@ def pipeline_output(
         ["bash", "-c", PIPELINE_CHAIN],
         mounts={FIXTURES: "/data", out_dir: "/out"},
         as_current_user=True,
-        # Pinned while build_reset_input's output is order-dependent; the
-        # determinism tests cover the unpinned case.
-        env={"PYTHONHASHSEED": "0"},
     )
     if result.returncode != 0:
         pytest.fail(f"pipeline chain failed in container:\n{result.stdout}\n{result.stderr}")
@@ -89,7 +81,7 @@ def test_casanovo_peptides_match_golden(pipeline_output: Path) -> None:
 
 
 def test_query_fasta_matches_golden(pipeline_output: Path) -> None:
-    actual = canonical_fasta((pipeline_output / "combined_results.fasta").read_text())
+    actual = (pipeline_output / "combined_results.fasta").read_text()
     assert actual == (GOLDEN / "combined_results.fasta").read_text()
 
 
@@ -99,12 +91,12 @@ def test_decoy_library_matches_golden(pipeline_output: Path) -> None:
 
 
 def test_reset_input_matches_golden(pipeline_output: Path) -> None:
-    actual = canonical_reset_input((pipeline_output / "reset_input.txt").read_text())
+    actual = (pipeline_output / "reset_input.txt").read_text()
     assert actual == (GOLDEN / "reset_input.txt").read_text()
 
 
 def test_reset_input_warning_matches_golden(pipeline_output: Path) -> None:
-    actual = canonical_missing_warning((pipeline_output / "reset_input.stderr").read_text())
+    actual = (pipeline_output / "reset_input.stderr").read_text()
     assert actual == (GOLDEN / "reset_input.stderr").read_text()
 
 

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import math
 import sys
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TextIO
@@ -121,21 +121,33 @@ def read_casanovo_peptides(file_path: str | Path) -> dict[str, CasanovoRecord]:
 
 
 def group_by_library_peptide(
-    peptides: Iterator[str] | set[str],
+    peptides: Iterable[str],
     diamond_map: Mapping[str, DiamondHit],
-) -> dict[str, set[str]]:
-    """Map each library subsequence to the query peptides that aligned to it."""
-    groups: dict[str, set[str]] = {}
+) -> dict[str, list[str]]:
+    """Map each library subsequence to the query peptides that aligned to it.
 
-    for peptide in peptides:
+    Keys and members are both ordered, so downstream aggregation cannot depend
+    on set-iteration order.
+    """
+    groups: dict[str, list[str]] = {}
+
+    for peptide in sorted(peptides):
         hit = diamond_map.get(peptide)
         if hit is None:
             continue
         if hit.ssequence is None:
             raise ValueError(f"Peptide {peptide} does not have an 'ssequence' property")
-        groups.setdefault(hit.ssequence, set()).add(peptide)
+        groups.setdefault(hit.ssequence, []).append(peptide)
 
-    return groups
+    return dict(sorted(groups.items()))
+
+
+def best_diamond_hit(group: Iterable[str], diamond_map: Mapping[str, DiamondHit]) -> DiamondHit:
+    """Highest-bit-score alignment in a group, ties broken by subject name."""
+    return max(
+        (diamond_map[peptide] for peptide in group),
+        key=lambda hit: (hit.bitscore, hit.sseqid),
+    )
 
 
 def write_reset_input(  # noqa: PLR0913, PLR0915 - one linear row-assembly routine
@@ -155,10 +167,9 @@ def write_reset_input(  # noqa: PLR0913, PLR0915 - one linear row-assembly routi
     missing_peptides = peptides - set(diamond_map.keys())
 
     if missing_peptides:
-        # BUG(#2): set iteration order, so this listing differs between runs.
         print(
             f"Warning: The following {len(missing_peptides)} peptides are missing "
-            f"from diamond_map and will be skipped: " + ", ".join(missing_peptides),
+            f"from diamond_map and will be skipped: " + ", ".join(sorted(missing_peptides)),
             file=err,
         )
 
@@ -167,16 +178,16 @@ def write_reset_input(  # noqa: PLR0913, PLR0915 - one linear row-assembly routi
     print("\t".join(OUTPUT_COLUMNS), file=out)
     scan_nr = 1
 
-    # BUG(#2): `groups` is keyed in set-iteration order and each group is itself
-    # a set, so row order, ScanNr, and -- because best_diamond_label is both
-    # computed and read inside this loop -- the decoy filtering below all vary
-    # between runs. Fixed in the next commit.
     for library_hit_peptide, group in groups.items():
-        best_diamond_peptide_length = 0
-        best_diamond_bit_score: float = 0
-        best_diamond_perc_identity: float = 0
-        best_diamond_label = 1
-        best_diamond_protein = ""
+        # Resolved over the whole group before any Comet hit is examined. The
+        # decoy filter below reads this, so computing it in the same pass made
+        # the result depend on the order the group happened to be iterated in.
+        best_hit = best_diamond_hit(group, diamond_map)
+        best_diamond_peptide_length = best_hit.subject_length
+        best_diamond_bit_score = best_hit.bitscore
+        best_diamond_perc_identity = best_hit.pident
+        best_diamond_label = -1 if best_hit.is_decoy(library_decoy_prefix) else 1
+        best_diamond_protein = best_hit.sseqid
 
         casanovo_num_spectra = 0
         casanovo_num_peptides = 0
@@ -193,19 +204,10 @@ def write_reset_input(  # noqa: PLR0913, PLR0915 - one linear row-assembly routi
         comet_ppm_error = "0"
         comet_num_peptidoforms = 0
         comet_best_rank_score = _WORST_RANK
-        comet_best_is_decoy = False
 
         for peptide in group:
-            diamond_hit = diamond_map[peptide]
             casanovo_data = casanovo_map.get(peptide)
             comet_data = comet_map.get(peptide)
-
-            if diamond_hit.bitscore > best_diamond_bit_score:
-                best_diamond_bit_score = diamond_hit.bitscore
-                best_diamond_peptide_length = diamond_hit.subject_length
-                best_diamond_perc_identity = diamond_hit.pident
-                best_diamond_label = -1 if diamond_hit.is_decoy(library_decoy_prefix) else 1
-                best_diamond_protein = diamond_hit.sseqid
 
             if casanovo_data is not None:
                 casanovo_num_spectra += casanovo_data.num_spectra
@@ -235,16 +237,14 @@ def write_reset_input(  # noqa: PLR0913, PLR0915 - one linear row-assembly routi
                         comet_best_rank_score = comet_data.rank_score
                         comet_n_tryptic = comet_data.tryptic_n
                         comet_c_tryptic = comet_data.tryptic_c
-                        comet_best_is_decoy = comet_data.is_decoy
+
+        # Every Comet hit contributing here passed the decoy filter above, so
+        # the group's best Comet hit can no longer be a decoy on a target row.
+        # The guard that used to sit here fired only because the label was
+        # still being computed while these hits were consumed.
 
         if casanovo_num_spectra == 0 and comet_num_spectra == 0:
             continue
-
-        if comet_best_is_decoy and best_diamond_label == 1:
-            raise ValueError(
-                "Found situation where best comet hit is a decoy and best "
-                "diamond hit is a target, stopping."
-            )
 
         combined_rank_score = 4 - comet_best_rank_score - casanovo_best_rank_score
 

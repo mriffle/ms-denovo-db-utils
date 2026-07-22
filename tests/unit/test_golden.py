@@ -19,12 +19,7 @@ from ms_denovo_db_utils.cli import (
     process_casanovo_results,
     process_comet_results,
 )
-from tests.canonical import (
-    basename_column,
-    canonical_fasta,
-    canonical_missing_warning,
-    canonical_reset_input,
-)
+from tests.canonical import basename_column
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 GOLDEN = FIXTURES / "golden"
@@ -77,7 +72,7 @@ def test_query_fasta_matches_golden(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     assert collate_into_fasta.main([str(comet_peptides), str(casanovo_peptides)]) == 0
-    actual = canonical_fasta(capsys.readouterr().out)
+    actual = capsys.readouterr().out
     assert actual == (GOLDEN / "combined_results.fasta").read_text()
 
 
@@ -96,8 +91,8 @@ def test_reset_input_matches_golden(
     assert build_reset_input.main(argv) == 0
     captured = capsys.readouterr()
 
-    assert canonical_reset_input(captured.out) == (GOLDEN / "reset_input.txt").read_text()
-    assert canonical_missing_warning(captured.err) == (GOLDEN / "reset_input.stderr").read_text()
+    assert captured.out == (GOLDEN / "reset_input.txt").read_text()
+    assert captured.err == (GOLDEN / "reset_input.stderr").read_text()
 
 
 def test_reset_input_still_accepts_the_legacy_positional_argument(
@@ -119,5 +114,5 @@ def test_reset_input_still_accepts_the_legacy_positional_argument(
         COMET_DECOY_PREFIX,
     ]
     assert build_reset_input.main(argv) == 0
-    actual = canonical_reset_input(capsys.readouterr().out)
+    actual = capsys.readouterr().out
     assert actual == (GOLDEN / "reset_input.txt").read_text()

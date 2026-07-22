@@ -66,12 +66,23 @@ def parse_line(line: str, line_num: int) -> DiamondHit:
     )
 
 
+def _preference(hit: DiamondHit) -> tuple[float, float, str]:
+    """Sort key selecting the best hit; smaller is better.
+
+    Ranked by e-value, then by descending bit score, then by subject name so
+    that fully tied alignments resolve the same way no matter what order
+    DIAMOND emitted its rows in.
+    """
+    return (hit.evalue, -hit.bitscore, hit.sseqid)
+
+
 def read_hits(file_path: str | Path, library_decoy_prefix: str) -> dict[str, DiamondHit]:
     """Return the best hit per query peptide, dropping ambiguous peptides.
 
     "Best" is the lowest e-value. A peptide that aligns to both target and
     decoy proteins in the annotated library carries no usable target/decoy
-    signal, so it is discarded entirely.
+    signal, so it is discarded entirely -- regardless of which of its
+    alignments happened to be the best one, or of the order they appear in.
     """
     best: dict[str, DiamondHit] = {}
     proteins_by_peptide: dict[str, set[str]] = {}
@@ -84,16 +95,13 @@ def read_hits(file_path: str | Path, library_decoy_prefix: str) -> dict[str, Dia
 
             hit = parse_line(line, line_num)
 
-            # BUG(#3): clearing the accumulated protein set here means the
-            # ambiguity check below only sees proteins from the best hit
-            # onward, so whether a peptide is filtered depends on the order
-            # DIAMOND happened to emit its rows. Fixed in the next commit.
             incumbent = best.get(hit.qseqid)
-            if incumbent is None or hit.evalue < incumbent.evalue:
+            if incumbent is None or _preference(hit) < _preference(incumbent):
                 best[hit.qseqid] = hit
-                proteins_by_peptide[hit.qseqid] = set()
 
-            proteins_by_peptide[hit.qseqid].add(hit.sseqid)
+            # Accumulated over *every* alignment, so the ambiguity check below
+            # sees the peptide's full protein set.
+            proteins_by_peptide.setdefault(hit.qseqid, set()).add(hit.sseqid)
 
     ambiguous = {
         peptide
