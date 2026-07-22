@@ -1,0 +1,4 @@
+CometVersion 2023.02 rev. 0	msms_run_summary
+scan	num	charge	exp_neutral_mass	calc_neutral_mass	e-value	xcorr	delta_cn	sp_score	ions_matched	ions_total	plain_peptide	modified_peptide	prev_aa	next_aa	protein	duplicate_protein_count	modifications	retention_time_sec	sp_rank
+301	1	2	1543.741200	1543.741200	1e-08	3.4	0.25	500.1	12	24	SAMPLEPEPTIDER	K.SAMPLEPEPTIDER.A	K	A	sp|Q1|DBPROT1	0	-	1200.5	1
+302	1	2	1543.741973	1543.741200	5e-09	3.4	0.25	500.1	12	24	SAMPLEPEPTIDEK	K.SAMPLEPEPTIDEK.A	K	A	COMET_DECOY_sp|Q1|DBPROT1	0	-	1200.5	1

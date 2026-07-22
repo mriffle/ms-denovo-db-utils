@@ -1,0 +1,13 @@
+MTD	mzTab-version	1.0.0
+MTD	mzTab-mode	Summary
+MTD	mzTab-type	Identification
+MTD	software[1]	[MS, MS:1003281, Casanovo, 4.2.1]
+MTD	psm_search_engine_score[1]	[MS, MS:1001143, search engine score, ]
+MTD	ms_run[1]-location	file:///data/run1.mzML
+PSH	PSM_ID	sequence	accession	unique	database	database_version	search_engine	search_engine_score[1]	modifications	retention_time	charge	exp_mass_to_charge	calc_mass_to_charge	spectra_ref	pre	post	start	end
+PSM	0	SAMPLEPEPTIDER	null	null	null	null	[MS, MS:1003281, Casanovo, 4.2.1]	0.9812	null	1200.5	2.0	772.877900	772.877900	ms_run[1]:index=0	null	null	null	null
+PSM	1	S+79.966AMPLEPEPTIDER	null	null	null	null	[MS, MS:1003281, Casanovo, 4.2.1]	0.9440	null	1200.5	2.0	812.862726	812.861100	ms_run[1]:index=1	null	null	null	null
+PSM	2	SAMPLEPEPTIDER	null	null	null	null	[MS, MS:1003281, Casanovo, 4.2.1]	0.8123	null	1200.5	3.0	515.586927	515.587700	ms_run[1]:index=2	null	null	null	null
+PSM	3	ANTHERPEPTIDEK	null	null	null	null	[MS, MS:1003281, Casanovo, 4.2.1]	0.9990	null	1200.5	2.0	801.407941	801.407300	ms_run[1]:index=3	null	null	null	null
+PSM	4	NOVELPEPTIDEK	null	null	null	null	[MS, MS:1003281, Casanovo, 4.2.1]	-0.2500	null	1200.5	2.0	730.882555	730.380000	ms_run[1]:index=4	null	null	null	null
+PSM	5	SHAREDPEPTIDEK	null	null	null	null	[MS, MS:1003281, Casanovo, 4.2.1]	0.7654	null	1200.5	2.0	666.336834	666.337300	ms_run[1]:index=5	null	null	null	null

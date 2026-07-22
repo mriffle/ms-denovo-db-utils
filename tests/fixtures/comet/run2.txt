@@ -1,0 +1,6 @@
+CometVersion 2023.02 rev. 0	msms_run_summary
+scan	num	charge	exp_neutral_mass	calc_neutral_mass	e-value	xcorr	delta_cn	sp_score	ions_matched	ions_total	plain_peptide	modified_peptide	prev_aa	next_aa	protein	duplicate_protein_count	modifications	retention_time_sec	sp_rank
+201	1	2	1543.743519	1543.741200	8e-09	3.4	0.25	500.1	12	24	SAMPLEPEPTIDER	K.SAMPLEPEPTIDER.A	K	A	sp|Q1|DBPROT1	0	-	1200.5	1
+202	1	2	1301.600652	1301.600000	5e-06	3.4	0.25	500.1	12	24	TIEDPEPTIDEAK	K.TIEDPEPTIDEAK.S	K	S	sp|Q6|DBPROT6	0	-	1200.5	1
+203	1	2	1288.600645	1288.600000	5e-06	3.4	0.25	500.1	12	24	TIEDPEPTIDEBK	K.TIEDPEPTIDEBK.S	K	S	sp|Q6|DBPROT6	0	-	1200.5	1
+204	1	2	1000.500000	1000.500000	0.00025	3.4	0.25	500.1	12	24	NOHOMOLOGYK	K.NOHOMOLOGYK.A	K	A	sp|Q7|DBPROT7	0	-	1200.5	1
