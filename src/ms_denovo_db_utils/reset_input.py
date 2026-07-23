@@ -155,6 +155,7 @@ def write_reset_input(  # noqa: PLR0913, PLR0915 - one linear row-assembly routi
     casanovo_map: Mapping[str, CasanovoRecord],
     diamond_map: Mapping[str, DiamondHit],
     library_decoy_prefix: str,
+    *,
     out: TextIO | None = None,
     err: TextIO | None = None,
 ) -> None:
