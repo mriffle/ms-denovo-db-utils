@@ -45,7 +45,11 @@ def comet_file(
     rows: list[tuple[str, str, str, float, float, float]],
     name: str = "run.txt",
 ) -> Path:
-    """Write a Comet .txt from (plain, modified, protein, evalue, calc, exp) rows."""
+    """Write a Comet .txt from (plain, modified, protein, evalue, calc, exp) rows.
+
+    Every row is its own spectrum, ranked 1. Use :func:`ranked_comet_file` to
+    write several ranked matches against a single spectrum.
+    """
     lines = ["CometVersion 2023.02 rev. 0\tmsms_run_summary", "\t".join(HEADER)]
     for scan, (plain, modified, protein, evalue, calc, exp) in enumerate(rows, start=1):
         lines.append(
@@ -66,6 +70,52 @@ def comet_file(
                     modified,
                     modified.split(".")[0],
                     modified.split(".")[-1],
+                    protein,
+                    "0",
+                    "-",
+                    "1200.5",
+                    "1",
+                ]
+            )
+        )
+    path = tmp_path / name
+    path.write_text("\n".join(lines) + "\n")
+    return path
+
+
+def ranked_comet_file(
+    tmp_path: Path,
+    rows: list[tuple[int, int, str, str, float]],
+    name: str = "ranked.txt",
+    *,
+    rank_value: str | None = None,
+) -> Path:
+    """Write a Comet .txt from explicit (scan, rank, plain, protein, evalue) rows.
+
+    Lets a single spectrum carry several ranked matches, which is what Comet
+    emits whenever num_output_lines > 1. `rank_value` overrides the rank column
+    verbatim, for testing malformed input.
+    """
+    lines = ["CometVersion 2023.02 rev. 0\tmsms_run_summary", "\t".join(HEADER)]
+    for scan, rank, plain, protein, evalue in rows:
+        lines.append(
+            "\t".join(
+                [
+                    str(scan),
+                    rank_value if rank_value is not None else str(rank),
+                    "2",
+                    "1543.741200",
+                    "1543.741200",
+                    repr(evalue),
+                    "3.4",
+                    "0.25",
+                    "500.1",
+                    "12",
+                    "24",
+                    plain,
+                    f"K.{plain}.A",
+                    "K",
+                    "A",
                     protein,
                     "0",
                     "-",
@@ -159,6 +209,84 @@ def test_lowest_evalue_psm_is_kept(tmp_path: Path) -> None:
     peptides = process_files([path], DECOY_PREFIX)
     assert peptides["PEPTIDER"].e_value == 1e-9
     assert peptides["PEPTIDER"].protein == "sp|BEST"
+
+
+# --------------------------------------------------------------------------
+# Within-spectrum rank. Comet emits num_output_lines matches per spectrum;
+# only the best-scoring one is evidence about that spectrum.
+# --------------------------------------------------------------------------
+def test_runner_up_matches_are_ignored(tmp_path: Path) -> None:
+    """A peptide seen only as a spectrum's second-best match is not evidence."""
+    path = ranked_comet_file(
+        tmp_path,
+        [
+            (101, 1, "TOPMATCHR", "sp|A", 1e-9),
+            (101, 2, "RUNNERUPR", "sp|B", 1e-3),
+            (101, 3, "THIRDPLACER", "sp|C", 1e-1),
+        ],
+    )
+    peptides = process_files([path], DECOY_PREFIX)
+    assert set(peptides) == {"TOPMATCHR"}
+
+
+def test_num_spectra_counts_spectra_not_rows(tmp_path: Path) -> None:
+    """The bug this guards: with 5 matches per spectrum the count was 5x too high."""
+    path = ranked_comet_file(
+        tmp_path,
+        [
+            (101, 1, "PEPTIDER", "sp|A", 1e-9),
+            (101, 2, "PEPTIDER", "sp|A", 1e-3),
+            (102, 1, "PEPTIDER", "sp|A", 1e-8),
+            (102, 2, "PEPTIDER", "sp|A", 1e-2),
+        ],
+    )
+    assert process_files([path], DECOY_PREFIX)["PEPTIDER"].num_spectra == 2
+
+
+def test_peptidoforms_from_runner_up_matches_are_excluded(tmp_path: Path) -> None:
+    path = ranked_comet_file(
+        tmp_path,
+        [
+            (101, 1, "PEPTIDER", "sp|A", 1e-9),
+            (101, 2, "PEPTIDEK", "sp|A", 1e-3),
+        ],
+    )
+    peptides = process_files([path], DECOY_PREFIX)
+    assert len(peptides["PEPTIDER"].peptidoforms) == 1
+    assert "PEPTIDEK" not in peptides
+
+
+def test_tied_top_ranked_matches_are_both_kept(tmp_path: Path) -> None:
+    """Both are genuinely top-scoring; dropping one would be an arbitrary choice."""
+    path = ranked_comet_file(
+        tmp_path,
+        [
+            (101, 1, "FIRSTTIEDR", "sp|A", 1e-9),
+            (101, 1, "SECONDTIEDR", "sp|B", 1e-9),
+        ],
+    )
+    assert set(process_files([path], DECOY_PREFIX)) == {"FIRSTTIEDR", "SECONDTIEDR"}
+
+
+def test_a_file_without_a_rank_column_still_parses(tmp_path: Path) -> None:
+    """`num` is optional: older or hand-made files keep their previous behaviour."""
+    path = ranked_comet_file(tmp_path, [(101, 1, "PEPTIDER", "sp|A", 1e-9)])
+    text = path.read_text().splitlines()
+    header = text[1].split("\t")
+    drop = header.index("num")
+    stripped = [text[0]]
+    stripped += [
+        "\t".join(c for i, c in enumerate(line.split("\t")) if i != drop) for line in text[1:]
+    ]
+    path.write_text("\n".join(stripped) + "\n")
+
+    assert set(process_files([path], DECOY_PREFIX)) == {"PEPTIDER"}
+
+
+def test_a_non_numeric_rank_is_an_error(tmp_path: Path) -> None:
+    path = ranked_comet_file(tmp_path, [(101, 1, "PEPTIDER", "sp|A", 1e-9)], rank_value="best")
+    with pytest.raises(CometFormatError, match="Non-numeric"):
+        process_files([path], DECOY_PREFIX)
 
 
 def test_every_psm_counts_toward_num_spectra(tmp_path: Path) -> None:

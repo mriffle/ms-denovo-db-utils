@@ -1,8 +1,9 @@
 """Collapse Comet PSM output to one best row per distinct peptide.
 
-Comet reports one row per PSM. The pipeline needs peptide-level evidence, so
-this keeps the lowest-e-value PSM for each peptide and attaches counts and
-features derived from every PSM that peptide appeared in.
+Comet reports one row per PSM, ranked within each spectrum. Only each
+spectrum's best-scoring match is considered (see :data:`RANK_COLUMN`); of
+those, this keeps the lowest-e-value PSM for each peptide and attaches counts
+and features derived from every PSM that peptide appeared in.
 """
 
 from __future__ import annotations
@@ -24,6 +25,14 @@ REQUIRED_COLUMNS = (
     "calc_neutral_mass",
     "exp_neutral_mass",
 )
+
+#: Comet's within-spectrum rank; rank 1 is that spectrum's best-scoring match.
+#: Deliberately *not* in REQUIRED_COLUMNS -- a result file written without it
+#: still parses, it just cannot be filtered. Comet decides this ranking (by
+#: xcorr), and taking its word for it is what makes "top-scoring PSM per
+#: spectrum" mean the same thing here as it does in Comet.
+RANK_COLUMN = "num"
+TOP_RANK = 1
 
 OUTPUT_COLUMNS = (
     "plain_peptide",
@@ -90,6 +99,27 @@ def _column_indices(headers: Sequence[str], source: str) -> dict[str, int]:
         raise CometFormatError(f"Missing expected column in {source}: {exc}") from exc
 
 
+def is_top_ranked(row: Sequence[str], rank_index: int | None, source: str) -> bool:
+    """Whether this row is its spectrum's best-scoring match.
+
+    Rows ranked below the best are further matches to a spectrum already
+    accounted for; counting them would inflate ``num_spectra`` (which would no
+    longer count spectra) and ``num_peptidoforms``. Ties at rank 1 are all
+    kept, since each is genuinely a top-scoring match.
+
+    Returns True when the file carries no rank column, leaving such files to
+    behave as they always have.
+    """
+    if rank_index is None:
+        return True
+    try:
+        return int(row[rank_index]) == TOP_RANK
+    except ValueError as exc:
+        raise CometFormatError(
+            f"Non-numeric {RANK_COLUMN!r} value in {source}: {row[rank_index]!r}"
+        ) from exc
+
+
 def _iter_rows(handle: TextIO) -> Iterator[list[str]]:
     """Yield data rows, skipping Comet's version banner and header line."""
     next(handle)  # "CometVersion ..." banner
@@ -107,9 +137,14 @@ def process_files(file_paths: Iterable[str | Path], decoy_prefix: str) -> dict[s
         source = str(file_path)
         with Path(file_path).open() as handle:
             rows = _iter_rows(handle)
-            index = _column_indices(next(rows), source)
+            headers = next(rows)
+            index = _column_indices(headers, source)
+            rank_index = headers.index(RANK_COLUMN) if RANK_COLUMN in headers else None
 
             for row in rows:
+                if not is_top_ranked(row, rank_index, source):
+                    continue
+
                 plain_peptide = row[index["plain_peptide"]]
                 charge = int(row[index["charge"]])
                 e_value = float(row[index["e-value"]])
