@@ -9,10 +9,15 @@ from pathlib import Path
 import pytest
 
 from ms_denovo_db_utils.fasta import (
+    PEPTIDE_REVERSAL,
+    PROTEIN_REVERSAL,
     is_gzipped,
     iter_entries,
+    iter_peptides,
+    make_decoy,
     open_text,
     protein_name,
+    pseudo_reverse_sequence,
     reverse_sequence,
     write_with_decoys,
 )
@@ -95,12 +100,82 @@ def test_reverse_sequence_reverses() -> None:
 
 
 # --------------------------------------------------------------------------
+# Peptide-level (pseudo-reverse) decoys. Each tryptic peptide is reversed with
+# its C-terminal residue held fixed, matching how the custom Casanovo model's
+# training decoys were generated.
+# --------------------------------------------------------------------------
+def test_peptides_split_after_every_k_and_r() -> None:
+    assert list(iter_peptides("MSAMPLERPEPTIDEKGGTESTR")) == [
+        "MSAMPLER",
+        "PEPTIDEK",
+        "GGTESTR",
+    ]
+
+
+def test_a_trailing_fragment_without_a_cleavage_site_is_kept() -> None:
+    assert list(iter_peptides("PEPTIDEKSTUB")) == ["PEPTIDEK", "STUB"]
+
+
+def test_pseudo_reverse_holds_each_c_terminal_residue() -> None:
+    assert pseudo_reverse_sequence("MSAMPLERPEPTIDEKGGTESTR") == "ELPMASMREDITPEPKTSETGGR"
+
+
+def test_pseudo_reverse_preserves_length_and_composition() -> None:
+    sequence = "MSAMPLERPEPTIDEKGGTESTRAVK"
+    decoy = pseudo_reverse_sequence(sequence)
+    assert len(decoy) == len(sequence)
+    assert sorted(decoy) == sorted(sequence)
+
+
+def test_pseudo_reverse_pairs_one_to_one_with_targets() -> None:
+    """The property whole-protein reversal does not have."""
+    sequence = "MSAMPLERPEPTIDEKGGTESTRAVK"
+    targets = list(iter_peptides(sequence))
+    decoys = list(iter_peptides(pseudo_reverse_sequence(sequence)))
+    assert len(decoys) == len(targets)
+    assert [len(d) for d in decoys] == [len(t) for t in targets]
+    assert [d[-1] for d in decoys] == [t[-1] for t in targets]
+
+
+def test_a_shared_peptide_yields_the_same_decoy_in_any_protein_context() -> None:
+    """tex:82 claims this; protein-level reversal does not deliver it."""
+    shared = "PEPTIDEK"
+    in_first = pseudo_reverse_sequence("MSAMPLER" + shared + "GGTESTR")
+    in_second = pseudo_reverse_sequence("AVK" + shared + "WXYZR")
+    decoy_of_shared = pseudo_reverse_sequence(shared)
+    assert decoy_of_shared in in_first
+    assert decoy_of_shared in in_second
+
+
+def test_protein_reversal_does_not_preserve_the_shared_peptide_decoy() -> None:
+    """Contrast case, documenting why the default changed."""
+    shared = "PEPTIDEK"
+    decoy_of_shared = pseudo_reverse_sequence(shared)
+    assert decoy_of_shared not in reverse_sequence("MSAMPLER" + shared + "GGTESTR")
+
+
+def test_a_single_residue_peptide_is_unchanged() -> None:
+    assert pseudo_reverse_sequence("K") == "K"
+    assert pseudo_reverse_sequence("KR") == "KR"
+
+
+def test_make_decoy_dispatches_on_method() -> None:
+    assert make_decoy("PEPTIDEK", PEPTIDE_REVERSAL) == "EDITPEPK"
+    assert make_decoy("PEPTIDEK", PROTEIN_REVERSAL) == "KEDITPEP"
+
+
+def test_an_unknown_method_is_rejected() -> None:
+    with pytest.raises(ValueError, match="Unknown reversal method"):
+        make_decoy("PEPTIDEK", "shuffle")
+
+
+# --------------------------------------------------------------------------
 # Decoy generation
 # --------------------------------------------------------------------------
 def test_each_target_is_followed_by_its_decoy(tmp_path: Path) -> None:
     path = tmp_path / "in.fasta"
     path.write_text(">sp|A|X desc\nPEPTIDEK\n")
-    assert decoys_for(path) == (f">sp|A|X desc\nPEPTIDEK\n>{DECOY_PREFIX}sp|A|X desc\nKEDITPEP\n")
+    assert decoys_for(path) == (f">sp|A|X desc\nPEPTIDEK\n>{DECOY_PREFIX}sp|A|X desc\nEDITPEPK\n")
 
 
 def test_the_decoy_keeps_the_full_description(tmp_path: Path) -> None:
@@ -116,7 +191,7 @@ def test_a_trailing_stop_codon_is_stripped_before_reversal(tmp_path: Path) -> No
     path.write_text(">sp|A|X\nPEPTIDEK*\n")
     output = decoys_for(path)
     assert "PEPTIDEK\n" in output
-    assert "KEDITPEP\n" in output
+    assert "EDITPEPK\n" in output
     assert "*" not in output
 
 
@@ -138,7 +213,7 @@ def test_a_gzipped_input_is_read_transparently(tmp_path: Path) -> None:
     path = tmp_path / "in.fasta.gz"
     with gzip.open(path, "wt") as handle:
         handle.write(">sp|A|X\nPEPTIDEK\n")
-    assert "KEDITPEP" in decoys_for(path)
+    assert "EDITPEPK" in decoys_for(path)
 
 
 def test_reversal_is_an_involution_on_the_decoy(tmp_path: Path) -> None:
