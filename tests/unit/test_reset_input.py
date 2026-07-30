@@ -171,7 +171,48 @@ def test_the_label_follows_the_best_hit_not_the_first() -> None:
     }
     rows, _ = build({"AAAK": comet(), "BBBK": comet()}, {}, diamond_map)
     assert rows[0]["Label"] == "1"
-    assert rows[0]["Proteins"] == "sp|P2"
+    # Both proteins are named even though only one decided the label. The row
+    # is a region that genuinely occurs in a target *and* a decoy protein, and
+    # the label was settled by bit score alone. Label remains the authoritative
+    # field; Proteins now makes the ambiguity visible rather than hiding it.
+    assert rows[0]["Proteins"] == f"{DECOY}sp|P1,sp|P2"
+
+
+# --------------------------------------------------------------------------
+# Proteins column
+# --------------------------------------------------------------------------
+def test_every_protein_that_produced_the_region_is_named() -> None:
+    diamond_map = {
+        "AAAK": hit("AAAK", "sp|P2", ssequence="LIBPEPK", bitscore=70.0),
+        "BBBK": hit("BBBK", "sp|P1", ssequence="LIBPEPK", bitscore=30.0),
+    }
+    rows, _ = build({"AAAK": comet(), "BBBK": comet()}, {}, diamond_map)
+    assert rows[0]["Proteins"] == "sp|P1,sp|P2"
+
+
+def test_a_repeated_protein_is_named_once() -> None:
+    diamond_map = {
+        "AAAK": hit("AAAK", "sp|P1", ssequence="LIBPEPK", bitscore=70.0),
+        "BBBK": hit("BBBK", "sp|P1", ssequence="LIBPEPK", bitscore=30.0),
+    }
+    rows, _ = build({"AAAK": comet(), "BBBK": comet()}, {}, diamond_map)
+    assert rows[0]["Proteins"] == "sp|P1"
+
+
+def test_protein_order_does_not_depend_on_input_order() -> None:
+    """Sorted, because the group is built from a set-derived iteration."""
+    forward = {
+        "AAAK": hit("AAAK", "sp|ZZZ", ssequence="LIBPEPK", bitscore=70.0),
+        "BBBK": hit("BBBK", "sp|AAA", ssequence="LIBPEPK", bitscore=30.0),
+    }
+    reverse = {
+        "BBBK": hit("BBBK", "sp|AAA", ssequence="LIBPEPK", bitscore=30.0),
+        "AAAK": hit("AAAK", "sp|ZZZ", ssequence="LIBPEPK", bitscore=70.0),
+    }
+    comet_map = {"AAAK": comet(), "BBBK": comet()}
+    first, _ = build(comet_map, {}, forward)
+    second, _ = build(comet_map, {}, reverse)
+    assert first[0]["Proteins"] == second[0]["Proteins"] == "sp|AAA,sp|ZZZ"
 
 
 # --------------------------------------------------------------------------

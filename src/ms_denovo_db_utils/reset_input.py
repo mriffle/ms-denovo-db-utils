@@ -201,7 +201,22 @@ def write_reset_input(  # noqa: PLR0913, PLR0915 - one linear row-assembly routi
         best_diamond_bit_score = best_hit.bitscore
         best_diamond_perc_identity = best_hit.pident
         best_diamond_label = -1 if best_hit.is_decoy(library_decoy_prefix) else 1
-        best_diamond_protein = best_hit.sseqid
+
+        # Every distinct protein that produced this region, not just the best
+        # hit's. The row's identity is the library peptide, and the same
+        # subsequence can occur in several proteins -- common in a
+        # metaproteomics library, where related organisms share conserved
+        # regions. Naming only one discards annotations the pipeline exists to
+        # produce.
+        #
+        # Taken from the group's *retained* hits rather than from every
+        # alignment each query had. That is what makes the list correct by
+        # construction: a group member's ssequence is this region by
+        # definition, so each protein named genuinely contains it. A query's
+        # other alignments may have landed on a different region of a different
+        # protein, and listing those would assert something false.
+        proteins = sorted({diamond_map[peptide].sseqid for peptide in group})
+        best_diamond_proteins = ",".join(proteins)
 
         casanovo_num_spectra = 0
         casanovo_num_peptides = 0
@@ -287,7 +302,7 @@ def write_reset_input(  # noqa: PLR0913, PLR0915 - one linear row-assembly routi
             comet_num_peptidoforms,
             combined_rank_score,
             library_hit_peptide,
-            best_diamond_protein,
+            best_diamond_proteins,
         ]
 
         print("\t".join(str(value) for value in row), file=out)

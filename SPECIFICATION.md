@@ -243,6 +243,16 @@ combined_rank_score  Peptide  Proteins
 ```
 
 - `SpecId` is `<library peptide>_1`; `ScanNr` counts from 1 in output order.
+- `Proteins` is a **comma-separated, sorted** list of every distinct library
+  protein whose retained alignment produced this region — not just the best
+  hit's. The same subsequence occurring in several proteins is expected in a
+  metaproteomics library, where related organisms share conserved regions, and
+  those proteins carry the annotations the pipeline exists to produce. It is
+  output metadata, not a feature: `Label` is decided by the best hit alone and
+  is the authoritative target/decoy field.
+  Consequently `Proteins` **can name proteins of both classes** on one row, when
+  a region occurs in both a target and a decoy protein. That is real ambiguity
+  being surfaced, not a bug — but see §9 on how such a row gets its label.
 - `comet_best_score` is `log10(1 + 1/(e-value + 1e-20))` — larger is better,
   and the floor exists because Comet does report an e-value of exactly `0`.
 - `combined_rank_score` is `4 − comet_rank − casanovo_rank`; an engine that
@@ -395,6 +405,17 @@ across every seed tested. Only the pathological cases behave differently.
 ---
 
 ## 10. TODOs and open questions
+
+**Group-level target/decoy ambiguity is resolved by bit score, not filtered.**
+`read_hits` drops a *query peptide* that aligns to both target and decoy library
+proteins, on the grounds that it carries no usable target/decoy signal. The same
+ambiguity arises one level up — two different queries landing on the same library
+region, one via a target protein and one via a decoy — and there it is not
+dropped: `Label` follows whichever alignment had the higher bit score. The two
+levels are treated inconsistently. This became visible when `Proteins` started
+naming every protein for the region rather than one, and it is exercised by
+`test_the_label_follows_the_best_hit_not_the_first`. Whether the group-level case
+should be dropped too is a question for the FDR argument, not a local code fix.
 
 **Verify CI actually passes.** The workflows were pushed but no run has been
 observed. Locally verified as proxies: the full suite passes inside
