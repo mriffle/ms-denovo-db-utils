@@ -58,9 +58,22 @@ def plain_sequence(peptidoform: str) -> str:
 def adjust_score(score: float) -> float:
     """Lift negative Casanovo scores into [0, 1].
 
-    Casanovo subtracts 1 from the score when a PSM fails its precursor m/z
-    filter. Adding 1 back effectively disables that filter, which is what the
-    pipeline wants: the homology search decides what is credible, not Casanovo.
+    Casanovo before 5.2.0 subtracts 1 from the score of a PSM whose peptide
+    mass disagrees with the precursor, making it negative. Adding 1 back
+    restores the magnitude.
+
+    It does **not** recover what an unpenalised run would have produced, and
+    earlier comments here claiming it "effectively disables that filter" were
+    wrong. In those versions the precursor check also ends beams early and
+    orders the candidate heap; since unpenalised scores lie in [0, 1] and
+    penalised ones in [-1, 0], any precursor-matching candidate outranks every
+    non-matching one whatever its raw quality. Casanovo has therefore already
+    chosen which peptide to report, using penalised scores over a pruned
+    search space, before this code sees anything.
+
+    Casanovo 5.2.0 removed the precursor mass filter from de novo mode
+    entirely (PR #575), so its de novo scores are never negative and this is a
+    no-op. Kept so that mzTab files from older versions still parse.
     """
     return score + 1 if score < 0 else score
 
