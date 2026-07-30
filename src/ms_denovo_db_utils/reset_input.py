@@ -6,6 +6,11 @@ for every query peptide that aligned to that region is aggregated onto it, and
 the target/decoy label comes from whether the annotated-library protein carries
 the decoy prefix. FDR is therefore estimated over annotated-database
 identifications, not over spectrum identifications.
+
+Note that the label is a property of the *library* side alone. A query
+peptide's own decoy status never affects it, and does not gate whether its
+evidence is aggregated: target and decoy rows are assembled by identical rules,
+which is what lets decoy rows stand in for null target rows.
 """
 
 from __future__ import annotations
@@ -179,6 +184,14 @@ def write_reset_input(  # noqa: PLR0913, PLR0915 - one linear row-assembly routi
     print("\t".join(OUTPUT_COLUMNS), file=out)
     scan_nr = 1
 
+    # Cross-class evidence: a Comet peptide whose decoy status disagrees with
+    # the label of the library region it landed on. Both directions are counted
+    # into the features (see the note in the loop); these tallies exist so the
+    # frequency is observable, since it is the input to deciding whether the
+    # symmetric treatment is the right one.
+    decoy_comet_on_target_row = 0
+    target_comet_on_decoy_row = 0
+
     for library_hit_peptide, group in groups.items():
         # Resolved over the whole group before any Comet hit is examined. The
         # decoy filter below reads this, so computing it in the same pass made
@@ -221,28 +234,32 @@ def write_reset_input(  # noqa: PLR0913, PLR0915 - one linear row-assembly routi
                     casanovo_best_rank_score = casanovo_data.rank_score
 
             if comet_data is not None:
+                # Comet evidence is counted whatever its decoy status, matching
+                # the transitivity argument in the manuscript: if a spectrum
+                # matches a peptide well and that peptide resembles a library
+                # peptide, the match is attributable to the latter.
+                #
+                # This used to drop the decoy-Comet-on-target-row case alone.
+                # That was asymmetric -- the mirror case, a target Comet peptide
+                # on a library decoy row, was always counted -- so library target
+                # and library decoy rows were built from different rules. Decoy
+                # rows are the surrogate for null target rows, and that
+                # substitution assumes both are assembled the same way.
                 if comet_data.is_decoy and best_diamond_label == 1:
-                    print(
-                        f"Warning: Ignoring decoy comet hit for {peptide} that "
-                        f"matched target in library: {best_diamond_protein}",
-                        file=err,
-                    )
-                else:
-                    comet_num_spectra += comet_data.num_spectra
-                    comet_num_peptidoforms += comet_data.num_peptidoforms
-                    comet_num_peptides += 1
+                    decoy_comet_on_target_row += 1
+                elif not comet_data.is_decoy and best_diamond_label == -1:
+                    target_comet_on_decoy_row += 1
 
-                    if comet_data.score > comet_best_score:
-                        comet_best_score = comet_data.score
-                        comet_ppm_error = comet_data.mz_ppm_error
-                        comet_best_rank_score = comet_data.rank_score
-                        comet_n_tryptic = comet_data.tryptic_n
-                        comet_c_tryptic = comet_data.tryptic_c
+                comet_num_spectra += comet_data.num_spectra
+                comet_num_peptidoforms += comet_data.num_peptidoforms
+                comet_num_peptides += 1
 
-        # Every Comet hit contributing here passed the decoy filter above, so
-        # the group's best Comet hit can no longer be a decoy on a target row.
-        # The guard that used to sit here fired only because the label was
-        # still being computed while these hits were consumed.
+                if comet_data.score > comet_best_score:
+                    comet_best_score = comet_data.score
+                    comet_ppm_error = comet_data.mz_ppm_error
+                    comet_best_rank_score = comet_data.rank_score
+                    comet_n_tryptic = comet_data.tryptic_n
+                    comet_c_tryptic = comet_data.tryptic_c
 
         if casanovo_num_spectra == 0 and comet_num_spectra == 0:
             continue
@@ -275,3 +292,11 @@ def write_reset_input(  # noqa: PLR0913, PLR0915 - one linear row-assembly routi
 
         print("\t".join(str(value) for value in row), file=out)
         scan_nr += 1
+
+    if decoy_comet_on_target_row or target_comet_on_decoy_row:
+        print(
+            "Note: counted cross-class Comet evidence -- "
+            f"{decoy_comet_on_target_row} decoy peptide(s) on library target rows, "
+            f"{target_comet_on_decoy_row} target peptide(s) on library decoy rows.",
+            file=err,
+        )

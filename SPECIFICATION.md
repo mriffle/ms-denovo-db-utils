@@ -127,9 +127,17 @@ pipeline:
 | `comet_decoy_prefix` | `COMET_DECOY_` | The small FASTA Comet searches | `process_comet_results` → `is_decoy` column |
 | `library_decoy_prefix` | `LIBRARY_DECOY_` | The large annotated library | `build_reset_input` → `Label`, ambiguity filter |
 
-A Comet decoy hit whose group resolves to a library **target** is contradictory
-evidence and is discarded with a warning. A Comet decoy hit on a library
-**decoy** is the consistent case and is kept.
+A query peptide's Comet decoy status does **not** affect the row's `Label`, which
+comes from the library protein alone, and does not gate whether its evidence is
+aggregated. All four combinations are counted.
+
+This was not always so: the decoy-Comet-on-library-target case alone used to be
+discarded as "contradictory". That was asymmetric — the mirror case, a target
+Comet peptide on a library decoy row, was always counted — so library target and
+library decoy rows were assembled by different rules. Decoy rows are the
+surrogate for null target rows, and that substitution assumes both are built the
+same way. The counts of both cross-class directions are reported on stderr so
+their frequency stays observable.
 
 ---
 

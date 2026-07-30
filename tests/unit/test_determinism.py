@@ -149,6 +149,6 @@ def test_decoy_comet_hit_on_a_target_group_is_handled_the_same_way_every_run(
 
     label, comet_num_spectra, comet_num_peptides = fields[1], fields[12], fields[7]
     assert label == "1", "group's best DIAMOND hit is a target"
-    assert comet_num_peptides == "1", "the decoy Comet hit must not be counted"
-    assert comet_num_spectra == "1"
-    assert "Ignoring decoy comet hit for DECOYPEPTIDEK" in result.stderr
+    assert comet_num_peptides == "2", "target and decoy Comet hits are both counted"
+    assert comet_num_spectra == "2"
+    assert "1 decoy peptide(s) on library target rows" in result.stderr

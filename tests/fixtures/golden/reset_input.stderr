@@ -1,1 +1,2 @@
 Warning: The following 2 peptides are missing from diamond_map and will be skipped: NOHOMOLOGYK, UNMATCHEDPEPTK
+Note: counted cross-class Comet evidence -- 0 decoy peptide(s) on library target rows, 1 target peptide(s) on library decoy rows.

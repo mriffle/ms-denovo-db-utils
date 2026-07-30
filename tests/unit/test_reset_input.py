@@ -227,34 +227,69 @@ def test_database_peptide_length_is_the_aligned_region_length() -> None:
 
 
 # --------------------------------------------------------------------------
-# Decoy Comet hits
+# Decoy Comet hits. A query peptide's decoy status never gates whether its
+# evidence counts -- library target and library decoy rows are assembled by
+# identical rules, which is what lets decoy rows stand in for null target rows.
 # --------------------------------------------------------------------------
-def test_a_decoy_comet_hit_on_a_target_row_is_discarded() -> None:
+def test_a_decoy_comet_hit_on_a_target_row_is_counted() -> None:
     diamond_map = {
         "AAAK": hit("AAAK", "sp|P1", ssequence="LIBPEPK", bitscore=70.0),
         "DDDK": hit("DDDK", "sp|P1", ssequence="LIBPEPK", bitscore=30.0),
     }
     comet_map = {"AAAK": comet(num_spectra=2), "DDDK": comet(num_spectra=9, is_decoy=True)}
-    rows, err = build(comet_map, {}, diamond_map)
-    assert rows[0]["comet_num_spectra"] == "2"
-    assert rows[0]["num_comet_peptides"] == "1"
-    assert "Ignoring decoy comet hit for DDDK" in err
+    rows, _ = build(comet_map, {}, diamond_map)
+    assert rows[0]["comet_num_spectra"] == "11"
+    assert rows[0]["num_comet_peptides"] == "2"
 
 
-def test_a_decoy_comet_hit_on_a_decoy_row_is_kept() -> None:
-    """Decoy-on-decoy is the consistent case and carries real signal."""
+def test_a_decoy_comet_hit_on_a_decoy_row_is_counted() -> None:
     diamond_map = {"DDDK": hit("DDDK", f"{DECOY}sp|P1", ssequence="LIBPEPK")}
-    rows, err = build({"DDDK": comet(num_spectra=9, is_decoy=True)}, {}, diamond_map)
+    rows, _ = build({"DDDK": comet(num_spectra=9, is_decoy=True)}, {}, diamond_map)
     assert rows[0]["comet_num_spectra"] == "9"
-    assert "Ignoring" not in err
 
 
-def test_a_row_left_with_no_evidence_is_dropped_entirely() -> None:
-    """Discarding the only Comet hit must not leave a zero-evidence row."""
+def test_a_target_comet_hit_on_a_decoy_row_is_counted() -> None:
+    """The mirror of the case that used to be dropped; both must behave alike."""
+    diamond_map = {"AAAK": hit("AAAK", f"{DECOY}sp|P1", ssequence="LIBPEPK")}
+    rows, _ = build({"AAAK": comet(num_spectra=4)}, {}, diamond_map)
+    assert rows[0]["comet_num_spectra"] == "4"
+
+
+def test_cross_class_evidence_is_reported_in_both_directions() -> None:
+    """Not filtered, but the frequency has to stay observable."""
+    diamond_map = {
+        "DDDK": hit("DDDK", "sp|P1", ssequence="LIBPEPK"),
+        "AAAK": hit("AAAK", f"{DECOY}sp|P2", ssequence="OTHERPEPK"),
+    }
+    comet_map = {"DDDK": comet(is_decoy=True), "AAAK": comet()}
+    _, err = build(comet_map, {}, diamond_map)
+    assert "1 decoy peptide(s) on library target rows" in err
+    assert "1 target peptide(s) on library decoy rows" in err
+
+
+def test_no_cross_class_note_when_every_hit_agrees() -> None:
+    diamond_map = {"AAAK": hit("AAAK", "sp|P1", ssequence="LIBPEPK")}
+    _, err = build({"AAAK": comet()}, {}, diamond_map)
+    assert "cross-class" not in err
+
+
+def test_a_target_row_may_now_rest_on_decoy_comet_evidence_alone() -> None:
+    """Consequence of the symmetric treatment, asserted so it stays deliberate.
+
+    The transitivity argument endorses it: the spectrum matched the decoy
+    peptide well, and that peptide resembles the library target.
+    """
     diamond_map = {"DDDK": hit("DDDK", "sp|P1", ssequence="LIBPEPK")}
-    rows, err = build({"DDDK": comet(is_decoy=True)}, {}, diamond_map)
+    rows, _ = build({"DDDK": comet(is_decoy=True)}, {}, diamond_map)
+    assert len(rows) == 1
+    assert rows[0]["Label"] == "1"
+
+
+def test_a_row_with_no_evidence_at_all_is_dropped() -> None:
+    """A library region nothing aligned to must not become a row."""
+    diamond_map = {"AAAK": hit("AAAK", "sp|P1", ssequence="LIBPEPK")}
+    rows, _ = build({}, {}, diamond_map)
     assert rows == []
-    assert "Ignoring decoy comet hit" in err
 
 
 # --------------------------------------------------------------------------

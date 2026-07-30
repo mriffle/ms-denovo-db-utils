@@ -30,7 +30,8 @@ Isolated so the main dataset stays deterministic:
   decoy Comet hit is the group's best. The library decoy region and the target
   protein share a subsequence, so both queries land in one group.
 - `comet/decoy_meets_target.txt` + `diamond/decoy_meets_target.dmnd.txt` — a
-  decoy Comet hit landing on a library target subsequence.
+  decoy Comet hit landing on a library target subsequence. This combination was
+  once discarded; it is now counted like any other, and these fixtures pin that.
 
 `fasta/with_stop_codon.fasta` pins the trailing `*` stripping in decoy
 generation.
