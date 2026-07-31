@@ -29,8 +29,14 @@ OUTPUT_COLUMNS = (
     "Label",
     "ScanNr",
     "database_peptide_length",
-    "max_diamond_bitscore",
-    "max_diamond_perc_identity",
+    # Both come from the *same* alignment -- the group's highest-bit-score hit --
+    # so neither is a maximum taken independently. `max_diamond_perc_identity`
+    # was actively untrue: on a group whose alignments run 80% and 99% identity
+    # it reported 80%, the identity of the top-scoring hit rather than the top
+    # identity. Renamed rather than changed, because features describing one
+    # real alignment beat a chimera assembled from several.
+    "best_diamond_bitscore",
+    "best_diamond_perc_identity",
     "num_casanovo_peptides",
     "num_comet_peptides",
     "casanovo_num_spectra",

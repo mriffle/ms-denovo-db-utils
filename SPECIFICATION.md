@@ -234,8 +234,8 @@ The feature table for percolator_RESET. `FASTA` is the annotated library
 21 columns:
 
 ```
-SpecId  Label  ScanNr  database_peptide_length  max_diamond_bitscore
-max_diamond_perc_identity  num_casanovo_peptides  num_comet_peptides
+SpecId  Label  ScanNr  database_peptide_length  best_diamond_bitscore
+best_diamond_perc_identity  num_casanovo_peptides  num_comet_peptides
 casanovo_num_spectra  casanovo_best_score  casanovo_ppm_error
 casanovo_num_peptidoforms  comet_num_spectra  comet_n_tryptic  comet_c_tryptic
 comet_best_score  comet_ppm_error  comet_num_peptidoforms
