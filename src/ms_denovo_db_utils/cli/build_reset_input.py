@@ -17,9 +17,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("diamond_results_file")
     parser.add_argument("fasta_file", help="Annotated library FASTA, with decoys")
     parser.add_argument("library_decoy_prefix")
-    # Unused: Comet decoy status is already resolved upstream into the
-    # is_decoy column of comet_peptides.txt. Accepted so the existing
-    # Nextflow invocation keeps working; removed in the next commit.
+    # Unused: Comet decoy status is already resolved upstream into the is_decoy
+    # column of comet_peptides.txt, so this prefix has nothing left to do here.
+    #
+    # Accepted and ignored permanently -- do NOT remove it. A pipeline revision
+    # can be pinned to any published image, and `modules/build_reset_input.nf`
+    # still passes this positionally, so dropping the parameter would break every
+    # such run. Optional rather than required for the mirror case: a future
+    # pipeline that stops passing it must still work against this image.
+    #
+    # (An earlier comment here promised removal "in the next commit". That was
+    # never safe to do, for the reason above.)
     parser.add_argument("comet_decoy_prefix", nargs="?", default=None)
     args = parser.parse_args(argv)
 
