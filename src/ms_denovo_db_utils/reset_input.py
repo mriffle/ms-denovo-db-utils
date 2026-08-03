@@ -22,7 +22,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TextIO
 
-from .diamond import DiamondHit
+from .diamond import (
+    DECOY,
+    ENTRAPMENT_DECOY,
+    ENTRAPMENT_TARGET,
+    MIXED,
+    TARGET,
+    DiamondHit,
+    region_entrapment_class,
+)
 
 OUTPUT_COLUMNS = (
     "SpecId",
@@ -153,6 +161,10 @@ def group_by_library_peptide(
     return dict(sorted(groups.items()))
 
 
+#: Fixed reporting order, so the stderr note is stable across runs and diffable.
+REGION_CLASS_ORDER = (TARGET, ENTRAPMENT_TARGET, DECOY, ENTRAPMENT_DECOY, MIXED)
+
+
 def best_diamond_hit(group: Iterable[str], diamond_map: Mapping[str, DiamondHit]) -> DiamondHit:
     """Highest-bit-score alignment in a group, ties broken by subject name."""
     return max(
@@ -161,7 +173,7 @@ def best_diamond_hit(group: Iterable[str], diamond_map: Mapping[str, DiamondHit]
     )
 
 
-def write_reset_input(  # noqa: PLR0913, PLR0915 - one linear row-assembly routine
+def write_reset_input(  # noqa: PLR0913, PLR0915, PLR0912 - one linear row-assembly routine
     comet_map: Mapping[str, CometRecord],
     casanovo_map: Mapping[str, CasanovoRecord],
     diamond_map: Mapping[str, DiamondHit],
@@ -169,6 +181,7 @@ def write_reset_input(  # noqa: PLR0913, PLR0915 - one linear row-assembly routi
     *,
     out: TextIO | None = None,
     err: TextIO | None = None,
+    entrapment_prefix: str | None = None,
 ) -> None:
     # Resolved here rather than as default arguments, which would bind
     # whatever sys.stdout happened to be when this module was imported.
@@ -197,6 +210,13 @@ def write_reset_input(  # noqa: PLR0913, PLR0915 - one linear row-assembly routi
     # symmetric treatment is the right one.
     decoy_comet_on_target_row = 0
     target_comet_on_decoy_row = 0
+
+    # Regions by entrapment class. A region reachable from BOTH an original and an
+    # entrapment protein is not attributable to either population and must not be counted
+    # as an entrapment discovery; it is tallied as `mixed` instead. If that count is
+    # large the experiment is compromised, and this tally is the evidence -- which is why
+    # it is reported even when it is zero.
+    region_classes: dict[str, int] = {}
 
     for library_hit_peptide, group in groups.items():
         # Resolved over the whole group before any Comet hit is examined. The
@@ -314,6 +334,17 @@ def write_reset_input(  # noqa: PLR0913, PLR0915 - one linear row-assembly routi
         print("\t".join(str(value) for value in row), file=out)
         scan_nr += 1
 
+        if entrapment_prefix:
+            # Classified from the whole retained group, exactly what `Proteins` names, so
+            # a downstream scorer reading the file reaches the same answer.
+            klass = region_entrapment_class(
+                proteins,
+                library_decoy_prefix,
+                entrapment_prefix,
+                is_decoy_row=best_diamond_label == -1,
+            )
+            region_classes[klass] = region_classes.get(klass, 0) + 1
+
     if decoy_comet_on_target_row or target_comet_on_decoy_row:
         print(
             "Note: counted cross-class Comet evidence -- "
@@ -321,3 +352,16 @@ def write_reset_input(  # noqa: PLR0913, PLR0915 - one linear row-assembly routi
             f"{target_comet_on_decoy_row} target peptide(s) on library decoy rows.",
             file=err,
         )
+
+    if entrapment_prefix:
+        counts = ", ".join(f"{name} {region_classes.get(name, 0)}" for name in REGION_CLASS_ORDER)
+        print(f"Note: library regions by entrapment class -- {counts}.", file=err)
+        mixed = region_classes.get(MIXED, 0)
+        total = sum(region_classes.values())
+        if mixed:
+            print(
+                f"Note: {mixed} of {total} regions ({100.0 * mixed / total:.2f}%) are "
+                "reachable from both an original and an entrapment protein; these are "
+                "excluded from N_T and N_E.",
+                file=err,
+            )

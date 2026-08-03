@@ -29,14 +29,34 @@ def main(argv: Sequence[str] | None = None) -> int:
     # (An earlier comment here promised removal "in the next commit". That was
     # never safe to do, for the reason above.)
     parser.add_argument("comet_decoy_prefix", nargs="?", default=None)
+    # An OPTION, deliberately, not a seventh positional. The sixth positional above is
+    # `nargs="?"`, so a seventh could never be distinguished from it being omitted --
+    # `build_reset_input.py A B C D LIB ENT` would bind ENT to comet_decoy_prefix.
+    # Empty means "no entrapment class", which is the pre-entrapment behaviour.
+    parser.add_argument(
+        "--entrapment_prefix",
+        default=None,
+        help="Accession prefix marking entrapment proteins in the annotated library "
+        "(default: none, i.e. no entrapment accounting)",
+    )
     args = parser.parse_args(argv)
 
     comet_map = read_comet_peptides(args.comet_results_file)
     casanovo_map = read_casanovo_peptides(args.casanovo_results_file)
-    diamond_map = read_hits(args.diamond_results_file, args.library_decoy_prefix)
+    diamond_map = read_hits(
+        args.diamond_results_file,
+        args.library_decoy_prefix,
+        entrapment_prefix=args.entrapment_prefix,
+    )
     add_subject_sequences(diamond_map, args.fasta_file)
 
-    write_reset_input(comet_map, casanovo_map, diamond_map, args.library_decoy_prefix)
+    write_reset_input(
+        comet_map,
+        casanovo_map,
+        diamond_map,
+        args.library_decoy_prefix,
+        entrapment_prefix=args.entrapment_prefix,
+    )
     return 0
 
 

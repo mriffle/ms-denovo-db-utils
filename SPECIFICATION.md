@@ -279,10 +279,24 @@ LIBRARY_DECOY_ENTRAPMENT_sp|P12345|FOO_HUMAN  decoy of entrapment Label -1
 Test entrapment membership by **stripping the library decoy prefix first**, then
 testing for the entrapment prefix. Never test `ENTRAPMENT_` on a raw accession.
 
-### `build_reset_input.py COMET CASANOVO DIAMOND FASTA LIB_PREFIX [COMET_PREFIX]`
+### `build_reset_input.py COMET CASANOVO DIAMOND FASTA LIB_PREFIX [COMET_PREFIX] [--entrapment_prefix P]`
 
 The feature table for percolator_RESET. `FASTA` is the annotated library
 **with** decoys. `COMET_PREFIX` is accepted and ignored (§7).
+
+`--entrapment_prefix` is an **option, not a seventh positional** — the sixth is
+`nargs="?"`, so a seventh could never be told apart from that one being omitted.
+It changes no row: it adds a stderr tally of library regions by entrapment class,
+and defaults to off, in which case output is byte-identical to the
+pre-entrapment tool. Verified against the mouse benchmark: 196,086 lines, same
+MD5, with the flag both absent and present.
+
+The tally reports the **entrapment axis only**. A region naming both a target
+and a decoy protein is *not* counted as `mixed` — that is a different axis,
+pre-existing and documented above, and it happens on 2 of 196,085 regions in a
+library holding no entrapments. `mixed` means reachable from both an original
+and an entrapment protein, which is the count that says whether the FDR
+validation experiment is compromised.
 
 21 columns:
 

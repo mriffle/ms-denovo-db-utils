@@ -92,10 +92,19 @@ def build(
     comet_map: dict[str, CometRecord],
     casanovo_map: dict[str, CasanovoRecord],
     diamond_map: dict[str, DiamondHit],
+    entrapment_prefix: str | None = None,
 ) -> tuple[list[dict[str, str]], str]:
     """Run the writer and return parsed rows plus stderr."""
     out, err = io.StringIO(), io.StringIO()
-    write_reset_input(comet_map, casanovo_map, diamond_map, DECOY, out=out, err=err)
+    write_reset_input(
+        comet_map,
+        casanovo_map,
+        diamond_map,
+        DECOY,
+        out=out,
+        err=err,
+        entrapment_prefix=entrapment_prefix,
+    )
     lines = [line for line in out.getvalue().splitlines() if line]
     assert lines[0].split("\t") == list(OUTPUT_COLUMNS)
     rows = [dict(zip(OUTPUT_COLUMNS, line.split("\t"), strict=True)) for line in lines[1:]]
@@ -402,3 +411,62 @@ def test_casanovo_table_round_trips_through_the_reader(tmp_path: Path) -> None:
     assert record.num_spectra == 4
     assert record.rank_score == 0.4
     assert record.mz_ppm_error == "0.90"
+
+
+# --------------------------------------------------------------------------
+# Entrapment accounting (ENTRAPMENT_DESIGN.md §2.5)
+# --------------------------------------------------------------------------
+ENT = "ENTRAPMENT_"
+
+
+def _one_region(
+    subject: str,
+) -> tuple[dict[str, CometRecord], dict[str, CasanovoRecord], dict[str, DiamondHit]]:
+    return ({"PEPTIDEK": comet()}, {}, {"PEPTIDEK": hit("PEPTIDEK", subject, ssequence="PEPTIDEK")})
+
+
+def test_entrapment_accounting_is_silent_when_no_prefix_is_given() -> None:
+    """Default-off must be indistinguishable from the pre-entrapment tool: a pipeline
+    revision pinned to an older image still passes no prefix."""
+    _rows, err = build(*_one_region(f"{ENT}sp|P1|F"))
+    assert "entrapment class" not in err
+
+
+def test_entrapment_regions_are_counted_by_class() -> None:
+    rows, err = build(*_one_region(f"{ENT}sp|P1|F"), entrapment_prefix=ENT)
+    assert len(rows) == 1
+    assert "entrapment_target 1" in err
+    assert "target 1" in err  # both appear; the entrapment one is the specific count
+
+
+def test_an_entrapment_row_is_still_labelled_a_target() -> None:
+    """Entrapments must be indistinguishable to RESET. Only the accounting knows."""
+    rows, _err = build(*_one_region(f"{ENT}sp|P1|F"), entrapment_prefix=ENT)
+    assert rows[0]["Label"] == "1"
+
+
+def test_a_decoyed_entrapment_row_is_labelled_a_decoy() -> None:
+    rows, err = build(*_one_region(f"{DECOY}{ENT}sp|P1|F"), entrapment_prefix=ENT)
+    assert rows[0]["Label"] == "-1"
+    assert "entrapment_decoy 1" in err
+
+
+def test_a_region_from_an_original_and_an_entrapment_is_reported_as_mixed() -> None:
+    """The count that decides whether the experiment is compromised. Both queries resolve
+    to the same subject subsequence, so they form one region naming two proteins."""
+    comet_map = {"PEPTIDEK": comet(), "OTHERPEPK": comet()}
+    diamond_map = {
+        "PEPTIDEK": hit("PEPTIDEK", "sp|P1|F", ssequence="AAAAAAAA"),
+        "OTHERPEPK": hit("OTHERPEPK", f"{ENT}sp|P2|G", ssequence="AAAAAAAA"),
+    }
+    rows, err = build(comet_map, {}, diamond_map, entrapment_prefix=ENT)
+    assert len(rows) == 1
+    assert "mixed 1" in err
+    assert "excluded from N_T and N_E" in err
+
+
+def test_the_class_tally_is_reported_even_when_nothing_is_mixed() -> None:
+    """Zero is the informative case: it is the evidence that the experiment is clean."""
+    _rows, err = build(*_one_region("sp|P1|F"), entrapment_prefix=ENT)
+    assert "mixed 0" in err
+    assert "excluded from N_T and N_E" not in err
