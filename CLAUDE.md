@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Five pure-standard-library Python tools that post-process search results for the
+Six pure-standard-library Python tools that post-process search results for the
 [nf-ms-denovo-db](https://github.com/mriffle/nf-ms-denovo-db) pipeline, plus the
 container image (`quay.io/protio/ms-denovo-db-utils`) that ships them.
 

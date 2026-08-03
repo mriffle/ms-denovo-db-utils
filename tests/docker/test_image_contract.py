@@ -25,6 +25,7 @@ PIPELINE_SCRIPT_PATHS = [
     "/usr/local/bin/collate_into_fasta.py",
     "/usr/local/bin/build_reset_input.py",
     "/usr/local/bin/generate_reverse_decoys.py",
+    "/usr/local/bin/generate_entrapments.py",
 ]
 
 

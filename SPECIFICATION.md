@@ -12,7 +12,7 @@ is the operational detail behind it.
 ## 1. What this is
 
 `ms-denovo-db-utils` is the source repository for the container image
-`quay.io/protio/ms-denovo-db-utils`, which supplies five result-processing
+`quay.io/protio/ms-denovo-db-utils`, which supplies six result-processing
 tools to the [ms-denovo-db](https://github.com/mriffle/nf-ms-denovo-db)
 Nextflow pipeline.
 
@@ -172,7 +172,7 @@ same functions under clean names so the pipeline can migrate later.
 
 ---
 
-## 5. The five tools
+## 5. The six tools
 
 Argument order is the deployed contract. Do not reorder positionals.
 
@@ -225,6 +225,59 @@ Writes every target entry followed by its reversed decoy. Gzip is detected by
 **magic number, not extension**; a gzipped input produces gzipped stdout, and
 `GENERATE_LIBRARY_DECOYS` in the pipeline names its output `.fasta.gz` or
 `.fasta` on exactly that behaviour. A trailing `*` is stripped before reversal.
+
+### `generate_entrapments.py INPUT [--entrapment_prefix P] [--ratio R] [--seed S]`
+
+Writes every target entry followed by `R` **entrapment** entries: the same
+protein with each tryptic peptide shuffled, C-terminal residue held in place.
+Entrapments are added to the searched database so that any accepted hit on one
+is false by construction; counting them estimates the false discoveries hiding
+among the real targets. See `ENTRAPMENT_DESIGN.md` in the working directory.
+
+Same gzip contract as `generate_reverse_decoys.py`, and for the same reason: it
+runs immediately **before** it in the pipeline, so that decoy generation covers
+the expanded database and every entrapment gets its own decoy. Injecting after
+decoys would leave targets outnumbering decoys and bias RESET's FDR *low* — the
+one direction that would make the experiment useless.
+
+Four things here are load-bearing:
+
+- **It shuffles; it must never reverse.** `pseudo_reverse_sequence` already
+  implements the same C-terminus-fixed, peptide-by-peptide idiom as *reversal*,
+  to build the decoys. An entrapment built that way would be byte-identical to
+  the decoy of the same protein and the experiment would measure nothing.
+- **The shuffle is seeded from the peptide sequence, via `hashlib`, not from a
+  stream RNG and not from `hash()`.** The same peptide must yield the same
+  entrapment regardless of protein context or file order, so that a peptide
+  shared between the annotated library and the Comet database gets the same
+  entrapment in both. `hash()` is salted per process and would silently break
+  this. `tests/unit/test_determinism.py` covers it.
+- **Every peptide is shuffled, not only those in the 7–35 window** — a
+  deliberate deviation from the paper, because this pipeline reaches the library
+  by homology rather than exact match, so a verbatim stretch is an alignment
+  anchor. Under the paper's literal window 28.6% of Swiss-Prot residues sit in
+  verbatim runs of ≥7 aa and the longest run is 5,048 aa; shuffling everything
+  gives 2.65% and 168 aa. `--outside_window keep` restores the paper's version.
+- **A peptide that could not be shuffled into something new is counted and
+  reported**, never silently kept: it is not verifiably false, and hiding it
+  would inflate `N_E`.
+
+The uniqueness rule is "no two **different** peptides may share an entrapment",
+not "no entrapment string may repeat" — the same peptide recurring must produce
+the same entrapment, which is exactly the cross-database property above.
+
+Entrapment membership is an axis orthogonal to `Label`, carried by the accession
+prefix, and the prefixes compose outward:
+
+```
+sp|P12345|FOO_HUMAN                           original target    Label +1
+ENTRAPMENT_sp|P12345|FOO_HUMAN                entrapment target  Label +1
+LIBRARY_DECOY_sp|P12345|FOO_HUMAN             decoy of original  Label -1
+LIBRARY_DECOY_ENTRAPMENT_sp|P12345|FOO_HUMAN  decoy of entrapment Label -1
+```
+
+Test entrapment membership by **stripping the library decoy prefix first**, then
+testing for the entrapment prefix. Never test `ENTRAPMENT_` on a raw accession.
 
 ### `build_reset_input.py COMET CASANOVO DIAMOND FASTA LIB_PREFIX [COMET_PREFIX]`
 

@@ -33,6 +33,7 @@ process-casanovo-results = "ms_denovo_db_utils.cli.process_casanovo_results:main
 collate-into-fasta = "ms_denovo_db_utils.cli.collate_into_fasta:main"
 build-reset-input = "ms_denovo_db_utils.cli.build_reset_input:main"
 generate-reverse-decoys = "ms_denovo_db_utils.cli.generate_reverse_decoys:main"
+generate-entrapments = "ms_denovo_db_utils.cli.generate_entrapments:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

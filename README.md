@@ -118,7 +118,7 @@ make test-docker
 ```
 
 This rebuilds the image and then runs the container suite, which checks the
-contract the pipeline depends on — that all five script paths exist and start
+contract the pipeline depends on — that all six script paths exist and start
 cleanly, that the entrypoint passes commands through and propagates non-zero
 exit codes, that `ps` and bash process substitution work — and re-runs the full
 tool chain inside the container, comparing against the same expected outputs
