@@ -19,7 +19,14 @@ dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "mypy>=1.11",
-    "ruff>=0.6",
+    # Upper bound deliberate. `select` names whole rule families ("PL", "B", ...),
+    # so a ruff release that promotes a rule out of preview starts failing CI with
+    # no commit of ours in between -- and it fails ONLY in CI, because a developer's
+    # .venv holds whatever ruff was current when they last installed. That is
+    # exactly what happened with PLR0917 on 2026-08-10. Bump this deliberately,
+    # with `make lint` green locally first, rather than letting upstream pick the
+    # moment.
+    "ruff>=0.6,<0.16",
     # tomllib is stdlib only from 3.11; 3.10 is the container interpreter.
     "tomli>=2.0; python_version < '3.11'",
 ]

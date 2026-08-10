@@ -197,6 +197,7 @@ def shuffle_peptide(peptide: str, seed: int = 0, attempt: int = 0) -> str:
 
 def make_entrapment(  # noqa: PLR0913 - the paper's construction has this many knobs
     sequence: str,
+    *,
     seed: int = 0,
     stats: EntrapmentStats | None = None,
     originals: frozenset[str] | set[str] | None = None,
@@ -257,7 +258,16 @@ def make_entrapment(  # noqa: PLR0913 - the paper's construction has this many k
                 stats.count(KEPT_OUT_OF_WINDOW, peptide, peptide)
                 out.append(peptide)
                 continue
-        out.append(_entrap_peptide(peptide, seed, stats, originals, in_window, max_retries))
+        out.append(
+            _entrap_peptide(
+                peptide,
+                seed=seed,
+                stats=stats,
+                originals=originals,
+                in_window=in_window,
+                max_retries=max_retries,
+            )
+        )
     entrapment = "".join(out)
     # Measured over the whole protein, not per peptide: a verbatim run can straddle a
     # cleavage boundary, and the boundary residue is pinned on both sides of it, so
@@ -284,6 +294,7 @@ def _record_verbatim_runs(original: str, entrapment: str, stats: EntrapmentStats
 
 def _entrap_peptide(  # noqa: PLR0913 - threads the caller's accumulators, not configuration
     peptide: str,
+    *,
     seed: int,
     stats: EntrapmentStats,
     originals: frozenset[str] | set[str] | None,
@@ -403,6 +414,7 @@ def iter_entrapments(  # noqa: PLR0913 - mirrors write_with_entrapments' signatu
     input_file: str | Path,
     entrapment_prefix: str,
     originals: set[str] | None,
+    *,
     ratio: float = 1.0,
     seed: int = 0,
     stats: EntrapmentStats | None = None,
@@ -433,6 +445,7 @@ def write_with_entrapments(  # noqa: PLR0913 - mirrors write_with_decoys plus th
     input_file: str | Path,
     entrapment_prefix: str,
     output: IO[str],
+    *,
     ratio: float = 1.0,
     seed: int = 0,
     err: IO[str] | None = sys.stderr,
@@ -449,7 +462,7 @@ def write_with_entrapments(  # noqa: PLR0913 - mirrors write_with_decoys plus th
     originals = collect_peptides(input_file) if check_uniqueness else None
     stats = EntrapmentStats()
     for header, sequence in iter_entrapments(
-        input_file, entrapment_prefix, originals, ratio, seed, stats, **kwargs
+        input_file, entrapment_prefix, originals, ratio=ratio, seed=seed, stats=stats, **kwargs
     ):
         output.write(f"{header}\n{sequence}\n")
     if err is not None:
