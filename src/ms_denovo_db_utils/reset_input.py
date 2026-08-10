@@ -110,11 +110,33 @@ def _read_table(file_path: str | Path) -> Iterator[tuple[str, dict[str, str]]]:
             yield columns[0], {header[i]: columns[i] for i in range(1, len(header))}
 
 
+def _spectrum_count(row: Mapping[str, str], peptide: str, file_path: str | Path) -> int:
+    """``num_spectra`` for one row, rejecting counts below one.
+
+    A peptide exists in these files *because* a spectrum matched it: the upstream
+    steps create the record and increment the count in the same breath, so the
+    smallest value they can write is 1. A zero therefore means the file did not
+    come from ``process_comet_results`` / ``process_casanovo_results`` intact.
+
+    This is checked rather than tolerated because the alternative is silent. Nothing
+    downstream can distinguish a region dropped for a corrupt count from a region that
+    was never hit, so a damaged input would shorten `reset_input.txt` and still exit 0 --
+    a change in scientific output with no signal attached to it.
+    """
+    count = int(row["num_spectra"])
+    if count < 1:
+        raise ValueError(
+            f"{file_path}: peptide {peptide} has num_spectra={count}, but every peptide "
+            f"in this file must be supported by at least one spectrum"
+        )
+    return count
+
+
 def read_comet_peptides(file_path: str | Path) -> dict[str, CometRecord]:
     return {
         peptide: CometRecord(
             e_value=float(row["e-value"]),
-            num_spectra=int(row["num_spectra"]),
+            num_spectra=_spectrum_count(row, peptide, file_path),
             num_peptidoforms=int(row["num_peptidoforms"]),
             is_decoy=row["is_decoy"] == "1",
             rank_score=float(row["rank_score"]),
@@ -130,7 +152,7 @@ def read_casanovo_peptides(file_path: str | Path) -> dict[str, CasanovoRecord]:
     return {
         peptide: CasanovoRecord(
             score=float(row["search_engine_score[1]"]),
-            num_spectra=int(row["num_spectra"]),
+            num_spectra=_spectrum_count(row, peptide, file_path),
             num_peptidoforms=int(row["num_peptidoforms"]),
             rank_score=float(row["rank_score"]),
             mz_ppm_error=row["mz_ppm_error"],
@@ -302,8 +324,21 @@ def write_reset_input(  # noqa: PLR0913, PLR0915, PLR0912 - one linear row-assem
                     comet_n_tryptic = comet_data.tryptic_n
                     comet_c_tryptic = comet_data.tryptic_c
 
+        # Unreachable, and an error rather than a skip for that reason. A group's
+        # members come from `set(comet_map) | set(casanovo_map)`, so every member is in
+        # at least one engine map, and `_spectrum_count` has already refused any record
+        # counting fewer than one spectrum. Reaching here means one of those two
+        # invariants has broken; dropping the row instead would hide that in a file whose
+        # only symptom is being shorter than it should be.
+        #
+        # Kept even though the readers now check, because `write_reset_input` is called
+        # directly with hand-built maps -- by the tests, and by anything else importing
+        # this module -- and so cannot rely on having been fed by them.
         if casanovo_num_spectra == 0 and comet_num_spectra == 0:
-            continue
+            raise ValueError(
+                f"Library peptide {library_hit_peptide} has no spectrum evidence from "
+                f"either engine, aggregated over query peptides {sorted(group)}"
+            )
 
         combined_rank_score = 4 - comet_best_rank_score - casanovo_best_rank_score
 

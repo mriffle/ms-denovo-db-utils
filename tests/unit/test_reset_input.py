@@ -335,11 +335,29 @@ def test_a_target_row_may_now_rest_on_decoy_comet_evidence_alone() -> None:
     assert rows[0]["Label"] == "1"
 
 
-def test_a_row_with_no_evidence_at_all_is_dropped() -> None:
-    """A library region nothing aligned to must not become a row."""
+def test_a_library_region_no_query_peptide_reached_never_becomes_a_row() -> None:
+    """Structural, not filtered: groups are keyed off the query peptides themselves.
+
+    `write_reset_input` iterates `set(comet_map) | set(casanovo_map)`, so a region no
+    query peptide aligned to has nothing to key on and never enters the output. Note
+    this exercises that path and NOT the evidence-count check below, which needs a
+    group that exists but whose counts are zero.
+    """
     diamond_map = {"AAAK": hit("AAAK", "sp|P1", ssequence="LIBPEPK")}
     rows, _ = build({}, {}, diamond_map)
     assert rows == []
+
+
+def test_a_region_whose_evidence_counts_are_all_zero_is_an_error() -> None:
+    """Unreachable through the pipeline, so arriving here means an invariant broke.
+
+    The readers refuse a record counting fewer than one spectrum, and every group
+    member is in an engine map by construction. The writer checks anyway because it is
+    called directly with hand-built maps -- as it is here.
+    """
+    diamond_map = {"AAAK": hit("AAAK", "sp|P1", ssequence="LIBPEPK")}
+    with pytest.raises(ValueError, match="no spectrum evidence"):
+        build({"AAAK": comet(num_spectra=0)}, {}, diamond_map)
 
 
 # --------------------------------------------------------------------------
@@ -399,6 +417,23 @@ def test_comet_table_round_trips_through_the_reader(tmp_path: Path) -> None:
     assert (record.tryptic_n, record.tryptic_c) == ("1", "0")
 
 
+def test_a_comet_peptide_counting_no_spectra_is_rejected(tmp_path: Path) -> None:
+    """A peptide is in this file *because* a spectrum matched it, so zero is corruption.
+
+    `process_comet_results` creates the record and increments the count together, so 1
+    is the smallest value it can write. Skipping such a row instead would shorten
+    reset_input.txt with no other symptom and still exit 0.
+    """
+    path = tmp_path / "comet_peptides.txt"
+    path.write_text(
+        "plain_peptide\tcharge\te-value\tprotein\tfile\ttryptic_n\ttryptic_c\tnum_spectra\t"
+        "mz_ppm_error\tis_decoy\tproteins\trank_score\tnum_peptidoforms\n"
+        "PEPTIDEK\t2\t1e-09\tsp|A\trun.txt\t1\t0\t0\t-1.50\t1\tsp|A\t0.25\t3\n"
+    )
+    with pytest.raises(ValueError, match="PEPTIDEK has num_spectra=0"):
+        read_comet_peptides(path)
+
+
 def test_casanovo_table_round_trips_through_the_reader(tmp_path: Path) -> None:
     path = tmp_path / "casanovo_peptides.txt"
     path.write_text(
@@ -411,6 +446,18 @@ def test_casanovo_table_round_trips_through_the_reader(tmp_path: Path) -> None:
     assert record.num_spectra == 4
     assert record.rank_score == 0.4
     assert record.mz_ppm_error == "0.90"
+
+
+def test_a_casanovo_peptide_counting_no_spectra_is_rejected(tmp_path: Path) -> None:
+    """The Casanovo side of the same file contract, and the same reasoning."""
+    path = tmp_path / "casanovo_peptides.txt"
+    path.write_text(
+        "peptide_sequence\tcharge\tsearch_engine_score[1]\tfile\tmz_ppm_error\t"
+        "num_spectra\trank_score\tnum_peptidoforms\n"
+        "PEPTIDEK\t2\t0.9905\trun.mztab\t0.90\t0\t0.4\t3\n"
+    )
+    with pytest.raises(ValueError, match="PEPTIDEK has num_spectra=0"):
+        read_casanovo_peptides(path)
 
 
 # --------------------------------------------------------------------------
