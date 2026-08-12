@@ -1,0 +1,5 @@
+MTD	mzTab-version	1.0.0
+MTD	software[1]	[MS, MS:1003281, Casanovo, 5.2.0]
+MTD	ms_run[1]-location	file:///data/tied_b.mzML
+PSH	PSM_ID	sequence	accession	unique	database	database_version	search_engine	search_engine_score[1]	modifications	retention_time	charge	exp_mass_to_charge	calc_mass_to_charge	spectra_ref	pre	post	start	end
+PSM	0	UNDERFLOWPEPTLDEK	null	null	null	null	[MS, MS:1003281, Casanovo, 5.2.0]	0.0	null	1300.0	3.0	600.700000	600.900000	ms_run[1]:index=0	null	null	null	null

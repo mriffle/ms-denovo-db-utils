@@ -138,10 +138,20 @@ def adjust_score(score: float) -> float:
 
 
 def process_files(file_paths: Iterable[str | Path]) -> dict[str, CasanovoPeptide]:
-    """Read Casanovo mzTab files and return the best PSM per peptide."""
+    """Read Casanovo mzTab files and return the best PSM per peptide.
+
+    Sorted for the same reason as :func:`~.comet.process_files`: the best-PSM test is a
+    strict ``>``, so a tie keeps whichever PSM arrived first, and between files that was
+    the caller's argument order. No cross-file tie exists on the mouse benchmark -- both
+    orders reproduce the published ``casanovo_peptides.txt`` exactly -- but the exposure
+    is real rather than theoretical, because a Casanovo score is a product of per-residue
+    probabilities and underflows to exactly 0.0 on a long peptide: 888 of the benchmark's
+    113,839. Two spectra in different files predicting one such peptide would tie at 0.0
+    and their ``mz_ppm_error`` would be chosen by staging order.
+    """
     peptides: dict[str, CasanovoPeptide] = {}
 
-    for file_path in file_paths:
+    for file_path in sorted(file_paths, key=str):
         source = str(file_path)
         with Path(file_path).open() as handle:
             reader = csv.reader(handle, delimiter="\t")

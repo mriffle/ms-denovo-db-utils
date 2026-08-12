@@ -130,10 +130,35 @@ def _iter_rows(handle: TextIO) -> Iterator[list[str]]:
 
 
 def process_files(file_paths: Iterable[str | Path], decoy_prefix: str) -> dict[str, CometPeptide]:
-    """Read Comet result files and return the best PSM per peptide."""
+    """Read Comet result files and return the best PSM per peptide.
+
+    **The files are read in sorted order, and that is what makes the result
+    reproducible.** The best-PSM test below is a strict ``<``, so a peptide whose best
+    e-value is tied across several PSMs keeps whichever arrived first, and that PSM
+    donates ``charge``, ``mz_ppm_error`` and ``file`` to the output row. Within one file
+    arrival order is the file's own scan order and so is fixed; between files it was
+    whatever order the caller passed, which for the pipeline is the order Nextflow
+    happens to stage `COMET.out.comet_txt.collect()` -- not fixed between runs.
+
+    Ties are not an edge case. Comet caps its e-value at 999 rather than reporting
+    unboundedly bad ones, so that value is a bucket rather than a coincidence: on the
+    mouse benchmark 13,069 of 111,684 peptides (11.7%) have their best e-value sitting on
+    the ceiling, and any of them observed in more than one file ties. Reading the two
+    benchmark files in the two possible orders moves ``charge`` and ``mz_ppm_error`` on
+    118 peptides, which is what reaches ``reset_input.txt`` as drift in the trained
+    ``comet_ppm_error`` feature (`BENCHMARK_AUDIT.md` A83).
+
+    Sorting is preferred over a data-derived tie-break because every value still on the
+    table is itself a feature: choosing, say, the smallest \\|ppm\\| would make that
+    column a minimum over PSMs rather than one real PSM's measurement, shifting the
+    feature's distribution for every multiply-observed peptide. This changes which PSM
+    represents a tied peptide but not what "best" means, and at the 999 ceiling none of
+    the tied PSMs genuinely is better -- Comet has already discarded what would separate
+    them.
+    """
     peptides: dict[str, CometPeptide] = {}
 
-    for file_path in file_paths:
+    for file_path in sorted(file_paths, key=str):
         source = str(file_path)
         with Path(file_path).open() as handle:
             rows = _iter_rows(handle)
