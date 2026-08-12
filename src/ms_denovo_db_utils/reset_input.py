@@ -299,6 +299,29 @@ def write_reset_input(  # noqa: PLR0913, PLR0915, PLR0912 - one linear row-assem
         proteins = sorted({diamond_map[peptide].sseqid for peptide in group})
         best_diamond_proteins = ",".join(proteins)
 
+        # The `_seen` flags exist because the initialisers below are also legal
+        # measurements, so a plain `score > best` comparison cannot tell "no peptide from
+        # this engine" from "a peptide that scored zero".
+        #
+        # Casanovo's score is a product of per-residue probabilities, and on a long
+        # peptide that product underflows to exactly 0.0 -- 888 of the mouse benchmark's
+        # 113,839 de novo peptides, median length 78 residues. Such a peptide never beat
+        # a zero initialiser, so the fields assigned inside the `if` kept their
+        # placeholders even though the engine had contributed: `casanovo_ppm_error` read
+        # 0, which in a ppm column is a *perfect* precursor match rather than "not
+        # measured" (the true errors had a median magnitude of 409,421 ppm), and
+        # `casanovo_best_rank_score` stayed `_WORST_RANK`, so `combined_rank_score` came
+        # out 0.0 -- the value that means no engine contributed at all -- on 768 of
+        # 195,873 rows that did carry de novo evidence.
+        #
+        # The initialisers themselves are unchanged and still describe a row with no
+        # peptide from that engine. Only rows where the engine did speak are affected.
+        #
+        # Comet's transformed score cannot reach 0 in practice -- its e-value ceiling of
+        # 999 floors the score at 4.3e-04, and no benchmark row is affected -- but the
+        # comparison is written the same way rather than left as the one remaining place
+        # where a present peptide can lose to a placeholder.
+        casanovo_seen = False
         casanovo_num_spectra = 0
         casanovo_num_peptides = 0
         casanovo_best_score: float = 0
@@ -306,6 +329,7 @@ def write_reset_input(  # noqa: PLR0913, PLR0915, PLR0912 - one linear row-assem
         casanovo_num_peptidoforms = 0
         casanovo_best_rank_score = _WORST_RANK
 
+        comet_seen = False
         comet_num_spectra = 0
         comet_num_peptides = 0
         comet_n_tryptic = "0"
@@ -324,7 +348,8 @@ def write_reset_input(  # noqa: PLR0913, PLR0915, PLR0912 - one linear row-assem
                 casanovo_num_peptidoforms += casanovo_data.num_peptidoforms
                 casanovo_num_peptides += 1
 
-                if casanovo_data.score > casanovo_best_score:
+                if not casanovo_seen or casanovo_data.score > casanovo_best_score:
+                    casanovo_seen = True
                     casanovo_best_score = casanovo_data.score
                     casanovo_ppm_error = casanovo_data.mz_ppm_error
                     casanovo_best_rank_score = casanovo_data.rank_score
@@ -350,7 +375,8 @@ def write_reset_input(  # noqa: PLR0913, PLR0915, PLR0912 - one linear row-assem
                 comet_num_peptidoforms += comet_data.num_peptidoforms
                 comet_num_peptides += 1
 
-                if comet_data.score > comet_best_score:
+                if not comet_seen or comet_data.score > comet_best_score:
+                    comet_seen = True
                     comet_best_score = comet_data.score
                     comet_ppm_error = comet_data.mz_ppm_error
                     comet_best_rank_score = comet_data.rank_score

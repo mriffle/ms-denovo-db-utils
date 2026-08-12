@@ -59,6 +59,7 @@ def comet(
     num_peptidoforms: int = 1,
     is_decoy: bool = False,
     rank_score: float = 0.5,
+    mz_ppm_error: str = "1.00",
 ) -> CometRecord:
     return CometRecord(
         e_value=e_value,
@@ -66,7 +67,7 @@ def comet(
         num_peptidoforms=num_peptidoforms,
         is_decoy=is_decoy,
         rank_score=rank_score,
-        mz_ppm_error="1.00",
+        mz_ppm_error=mz_ppm_error,
         tryptic_n="1",
         tryptic_c="1",
     )
@@ -78,13 +79,14 @@ def casanovo(
     num_spectra: int = 1,
     num_peptidoforms: int = 1,
     rank_score: float = 0.5,
+    mz_ppm_error: str = "2.00",
 ) -> CasanovoRecord:
     return CasanovoRecord(
         score=score,
         num_spectra=num_spectra,
         num_peptidoforms=num_peptidoforms,
         rank_score=rank_score,
-        mz_ppm_error="2.00",
+        mz_ppm_error=mz_ppm_error,
     )
 
 
@@ -375,6 +377,72 @@ def test_a_missing_engine_contributes_the_worst_rank() -> None:
     diamond_map = {"AAAK": hit("AAAK", "sp|P1", ssequence="LIBPEPK")}
     rows, _ = build({"AAAK": comet(rank_score=0.25)}, {}, diamond_map)
     assert float(rows[0]["combined_rank_score"]) == pytest.approx(4 - 0.25 - 2)
+
+
+# --------------------------------------------------------------------------
+# A score of exactly zero is a measurement, not an absence.
+#
+# Casanovo's score is a product of per-residue probabilities, so on a long peptide
+# it underflows to exactly 0.0 -- 888 of the mouse benchmark's 113,839 de novo
+# peptides. Compared against a zero initialiser such a peptide never won, and the
+# row reported the placeholders instead of its evidence: a ppm error of 0, which
+# reads as a perfect precursor match, and the worst rank, which drove
+# `combined_rank_score` to the value reserved for a row no engine supports.
+# --------------------------------------------------------------------------
+def test_a_de_novo_peptide_scoring_zero_still_supplies_the_reported_features() -> None:
+    diamond_map = {"AAAK": hit("AAAK", "sp|P1", ssequence="LIBPEPK")}
+    zero = casanovo(score=0.0, rank_score=0.99, mz_ppm_error="-409421.55")
+    rows, _ = build({}, {"AAAK": zero}, diamond_map)
+    assert rows[0]["num_casanovo_peptides"] == "1"
+    assert rows[0]["casanovo_ppm_error"] == "-409421.55"
+    assert float(rows[0]["combined_rank_score"]) == pytest.approx(4 - 2 - 0.99)
+
+
+def test_a_row_carrying_evidence_never_scores_zero_on_the_combined_rank() -> None:
+    """0.0 is `4 - 2 - 2`: both engines silent. A row with evidence must not reach it.
+
+    This is the value RESET is handed as `--initial_dir`, so a row landing here is
+    ranked below every row that genuinely has one engine behind it.
+    """
+    diamond_map = {"AAAK": hit("AAAK", "sp|P1", ssequence="LIBPEPK")}
+    rows, _ = build({}, {"AAAK": casanovo(score=0.0, rank_score=1.0)}, diamond_map)
+    assert float(rows[0]["combined_rank_score"]) > 0.0
+
+
+def test_a_de_novo_peptide_scoring_zero_still_loses_to_a_better_one() -> None:
+    """The flag must not promote a zero-scoring peptide, only stop it being ignored."""
+    diamond_map = {
+        "AAAK": hit("AAAK", "sp|P1", ssequence="LIBPEPK"),
+        "BBBK": hit("BBBK", "sp|P1", ssequence="LIBPEPK"),
+    }
+    zero = casanovo(score=0.0, rank_score=0.99, mz_ppm_error="-409421.55")
+    better = casanovo(score=0.4, rank_score=0.10, mz_ppm_error="3.00")
+    for casanovo_map in ({"AAAK": zero, "BBBK": better}, {"AAAK": better, "BBBK": zero}):
+        rows, _ = build({}, casanovo_map, diamond_map)
+        assert rows[0]["casanovo_best_score"] == "0.4"
+        assert rows[0]["casanovo_ppm_error"] == "3.00"
+
+
+def test_a_comet_peptide_scoring_zero_still_supplies_the_reported_features() -> None:
+    """Dormant on real data -- Comet's e-value ceiling floors its score above 0 -- but
+    the two engines are written the same way so neither can regress into the trap."""
+    diamond_map = {"AAAK": hit("AAAK", "sp|P1", ssequence="LIBPEPK")}
+    zero = CometRecord(math.inf, 1, 1, False, 0.99, "7.77", "1", "1")
+    assert zero.score == 0.0
+    rows, _ = build({"AAAK": zero}, {}, diamond_map)
+    assert rows[0]["comet_ppm_error"] == "7.77"
+    assert rows[0]["comet_n_tryptic"] == "1"
+    assert float(rows[0]["combined_rank_score"]) == pytest.approx(4 - 0.99 - 2)
+
+
+def test_an_absent_engine_still_reports_the_placeholder_values() -> None:
+    """The other half of the fix: nothing changes for a row the engine never reached."""
+    diamond_map = {"AAAK": hit("AAAK", "sp|P1", ssequence="LIBPEPK")}
+    rows, _ = build({"AAAK": comet()}, {}, diamond_map)
+    assert rows[0]["num_casanovo_peptides"] == "0"
+    assert rows[0]["casanovo_best_score"] == "0"
+    assert rows[0]["casanovo_ppm_error"] == "0"
+    assert rows[0]["casanovo_num_peptidoforms"] == "0"
 
 
 def test_rows_are_ordered_by_spec_id_with_matching_scan_numbers() -> None:
