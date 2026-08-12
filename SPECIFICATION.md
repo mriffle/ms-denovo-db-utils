@@ -295,10 +295,40 @@ LIBRARY_DECOY_ENTRAPMENT_sp|P12345|FOO_HUMAN  decoy of entrapment Label -1
 Test entrapment membership by **stripping the library decoy prefix first**, then
 testing for the entrapment prefix. Never test `ENTRAPMENT_` on a raw accession.
 
-### `build_reset_input.py COMET CASANOVO DIAMOND FASTA LIB_PREFIX [COMET_PREFIX] [--entrapment_prefix P]`
+### `build_reset_input.py COMET CASANOVO DIAMOND FASTA LIB_PREFIX [COMET_PREFIX] [--entrapment_prefix P] [--no_il_equivalence]`
 
 The feature table for percolator_RESET. `FASTA` is the annotated library
 **with** decoys. `COMET_PREFIX` is accepted and ignored (§7).
+
+**I and L are treated as one residue here, and only here.** Casanovo runs with
+`replace_isoleucine_with_leucine: true` and emits zero I; 49% of Comet peptides
+contain one. Both spellings of one observed peptide are therefore separate strings,
+and before 2026-08-12 they were separate hypotheses. Peptides are now keyed on
+`peptide.normalise_il` when the two engines' tables and the DIAMOND hits are joined.
+`--no_il_equivalence` restores the old behaviour exactly, so one image can produce
+both sides of a comparison.
+
+Three things about *where* this is applied:
+
+- **Not in the query FASTA.** `collate_into_fasta` still emits both spellings, so each
+  aligns against the un-normalised library at its own best spelling. Normalising the
+  query instead would turn 41,342 exact I↔I matches into I↔L substitutions across the
+  24,691 Comet peptides that align at 100% identity, degrading
+  `best_diamond_perc_identity` and `best_diamond_bitscore` for about half the database
+  peptides in order to merge 1,606.
+- **Inside `read_hits`, as the file is read** — not by collapsing two filtered maps
+  afterwards. The two spellings then compete on e-value, and the ambiguity rule sees
+  the union of their subjects. Collapsing afterwards would let through a peptide whose
+  two spellings jointly span the target/decoy axis.
+- **The `Peptide` column is unaffected.** Regions come from the library, which is not
+  normalised; only the query side is.
+
+Measured on the mouse benchmark: 1,606 peptides had both spellings as queries, 89%
+already aggregated onto one region and 11% did not — 170 peptides that were two rows,
+of which only 3 of 340 carried two-engine support. Within one engine's table nothing
+collides (111,684 Comet and 113,839 Casanovo peptides normalise to as many keys); if
+two rows of one table ever do, the reader **raises** rather than merging, because
+`num_peptidoforms` is a count whose underlying set is not recoverable from that file.
 
 `--entrapment_prefix` is an **option, not a seventh positional** — the sixth is
 `nargs="?"`, so a seventh could never be told apart from that one being omitted.
@@ -433,6 +463,7 @@ contract** — it is what `python:3.10-slim` ships — and the newer legs are
 | `tests/unit/test_fasta.py` | gzip, parsing, decoy generation |
 | `tests/unit/test_diamond.py` | parsing, tie-breaks, ambiguity, subject regions |
 | `tests/unit/test_reset_input.py` | grouping, labels, aggregation, ordering |
+| `tests/unit/test_il_equivalence.py` | I≡L at the join: merged ambiguity rule, collision refusal, and the split-vs-merged pair end to end |
 | `tests/unit/test_golden.py` | full chain vs. stored expected output |
 | `tests/unit/test_determinism.py` | eight hash seeds, in subprocesses |
 | `tests/unit/test_performance.py` | rank scoring on 200k peptides (`slow`) |

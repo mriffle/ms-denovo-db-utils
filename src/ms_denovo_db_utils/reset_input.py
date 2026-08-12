@@ -31,6 +31,7 @@ from .diamond import (
     DiamondHit,
     region_entrapment_class,
 )
+from .peptide import normalise_il
 
 OUTPUT_COLUMNS = (
     "SpecId",
@@ -132,9 +133,38 @@ def _spectrum_count(row: Mapping[str, str], peptide: str, file_path: str | Path)
     return count
 
 
-def read_comet_peptides(file_path: str | Path) -> dict[str, CometRecord]:
+def _peptide_key(peptide: str, il_equivalence: bool, claimed: dict[str, str], src: object) -> str:
+    """Key one table row, refusing to silently merge two rows of the same table.
+
+    Under I == L two peptides of one engine's table can collapse -- ``PEPTLDEIK`` and
+    ``PEPTLDELK`` are isobaric, so both can be real database entries. They are not
+    mergeable from this file: ``num_peptidoforms`` is a *count*, and the peptidoform
+    sets behind the two counts overlap exactly when a modification and charge are shared,
+    so neither summing nor taking the maximum is right. The sets exist only upstream in
+    ``comet.process_files`` / ``casanovo.process_files``, and normalising there would
+    also normalise the query FASTA, which is the trade this design exists to avoid.
+
+    So this raises rather than guessing. Measured on the mouse benchmark it never fires:
+    111,684 Comet and 113,839 Casanovo peptides normalise to exactly as many keys.
+    """
+    key = normalise_il(peptide) if il_equivalence else peptide
+    if key in claimed:
+        raise ValueError(
+            f"{src}: peptides {claimed[key]!r} and {peptide!r} both normalise to {key!r} "
+            f"under I==L, and cannot be merged from this file -- num_peptidoforms is a "
+            f"count whose underlying set is not recoverable here. Re-run with "
+            f"--no_il_equivalence, or normalise upstream where the peptidoform sets live."
+        )
+    claimed[key] = peptide
+    return key
+
+
+def read_comet_peptides(
+    file_path: str | Path, *, il_equivalence: bool = False
+) -> dict[str, CometRecord]:
+    claimed: dict[str, str] = {}
     return {
-        peptide: CometRecord(
+        _peptide_key(peptide, il_equivalence, claimed, file_path): CometRecord(
             e_value=float(row["e-value"]),
             num_spectra=_spectrum_count(row, peptide, file_path),
             num_peptidoforms=int(row["num_peptidoforms"]),
@@ -148,9 +178,12 @@ def read_comet_peptides(file_path: str | Path) -> dict[str, CometRecord]:
     }
 
 
-def read_casanovo_peptides(file_path: str | Path) -> dict[str, CasanovoRecord]:
+def read_casanovo_peptides(
+    file_path: str | Path, *, il_equivalence: bool = False
+) -> dict[str, CasanovoRecord]:
+    claimed: dict[str, str] = {}
     return {
-        peptide: CasanovoRecord(
+        _peptide_key(peptide, il_equivalence, claimed, file_path): CasanovoRecord(
             score=float(row["search_engine_score[1]"]),
             num_spectra=_spectrum_count(row, peptide, file_path),
             num_peptidoforms=int(row["num_peptidoforms"]),

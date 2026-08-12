@@ -39,14 +39,28 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Accession prefix marking entrapment proteins in the annotated library "
         "(default: none, i.e. no entrapment accounting)",
     )
+    # I==L is ON by default because it is a correctness fix, not a mode: Casanovo emits
+    # only L and Comet reports whatever the database spells, so without it the two
+    # spellings of one observed peptide are two hypotheses in the FDR pool. The opt-out
+    # exists so that one image can reproduce the pre-2026-08-12 numbers exactly, which is
+    # what makes a before/after comparison a measurement rather than an assertion.
+    parser.add_argument(
+        "--no_il_equivalence",
+        action="store_true",
+        help="Treat I and L as distinct residues when merging the two engines' results, "
+        "as the pipeline did before 2026-08-12. Restores the old numbers exactly.",
+    )
     args = parser.parse_args(argv)
 
-    comet_map = read_comet_peptides(args.comet_results_file)
-    casanovo_map = read_casanovo_peptides(args.casanovo_results_file)
+    il_equivalence = not args.no_il_equivalence
+
+    comet_map = read_comet_peptides(args.comet_results_file, il_equivalence=il_equivalence)
+    casanovo_map = read_casanovo_peptides(args.casanovo_results_file, il_equivalence=il_equivalence)
     diamond_map = read_hits(
         args.diamond_results_file,
         args.library_decoy_prefix,
         entrapment_prefix=args.entrapment_prefix,
+        il_equivalence=il_equivalence,
     )
     add_subject_sequences(diamond_map, args.fasta_file)
 

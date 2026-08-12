@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .fasta import iter_entries, open_text, protein_name
+from .peptide import normalise_il
 
 #: DIAMOND's tabular default, in order.
 COLUMN_HEADERS = (
@@ -114,6 +115,7 @@ def read_hits(
     library_decoy_prefix: str,
     *,
     entrapment_prefix: str | None = None,
+    il_equivalence: bool = False,
 ) -> dict[str, DiamondHit]:
     """Return the best hit per query peptide, dropping ambiguous peptides.
 
@@ -126,6 +128,16 @@ def read_hits(
     the target/decoy axis, and entrapments are targets. It exists so that a caller can ask
     for the entrapment classes; with it ``None`` this function is bit-identical to what it
     was before entrapment existed.
+
+    ``il_equivalence`` keys the result on :func:`~.peptide.normalise_il` of the query name,
+    so the I-form and L-form of one peptide become one entry. It is applied **as the file
+    is read**, which is the whole reason it lives here rather than as a merge afterwards:
+    ``best`` then competes the two spellings on e-value, and ``proteins_by_peptide``
+    accumulates the union of their subjects, so the ambiguity rule is applied to the
+    merged peptide. Collapsing two already-filtered maps would instead let a peptide
+    survive whose two spellings jointly span the target/decoy axis. The surviving hit
+    keeps its own ``qseqid``, the spelling that actually aligned; only the key is
+    canonical. Default ``False``, so every existing caller is unaffected.
     """
     best: dict[str, DiamondHit] = {}
     proteins_by_peptide: dict[str, set[str]] = {}
@@ -137,14 +149,15 @@ def read_hits(
                 continue
 
             hit = parse_line(line, line_num)
+            key = normalise_il(hit.qseqid) if il_equivalence else hit.qseqid
 
-            incumbent = best.get(hit.qseqid)
+            incumbent = best.get(key)
             if incumbent is None or _preference(hit) < _preference(incumbent):
-                best[hit.qseqid] = hit
+                best[key] = hit
 
             # Accumulated over *every* alignment, so the ambiguity check below
             # sees the peptide's full protein set.
-            proteins_by_peptide.setdefault(hit.qseqid, set()).add(hit.sseqid)
+            proteins_by_peptide.setdefault(key, set()).add(hit.sseqid)
 
     ambiguous = {
         peptide
