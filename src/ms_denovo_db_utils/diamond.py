@@ -73,6 +73,41 @@ def _preference(hit: DiamondHit) -> tuple[float, float, str]:
     Ranked by e-value, then by descending bit score, then by subject name so
     that fully tied alignments resolve the same way no matter what order
     DIAMOND emitted its rows in.
+
+    **In practice this selects on subject protein length, and that is worth knowing
+    before reading it as a quality ranking.** The pipeline runs DIAMOND with ``--top 0``
+    (`modules/diamond.nf`), which reports *only* alignments tied with the query's best
+    score — measured over the mouse benchmark, not one of 146,334 queries has reported
+    alignments differing in bit score. So the second key is dead, and among alignments of
+    identical score an e-value varies only with how long the subject sequence is: a
+    shorter protein gives a lower e-value for the same match. The rule therefore resolves
+    to "the region in the shortest library protein", which is nobody's intent and is not
+    what the manuscript's defence of the e-value criterion describes.
+
+    **Left as it is deliberately, on measurement (2026-08-12).** Rebuilding
+    `reset_input.txt` with the tie broken by percent identity instead moves a trained
+    feature on **468 of ~196,000 rows (0.23%)** and flips **zero** labels; the
+    target/decoy split moves 7 and 13 rows, and the swapped regions carry near-identical
+    class composition, so there is no FDR consequence in either direction (decoys are
+    built by peptide-level reversal, which preserves protein length exactly). What does
+    move is annotation: ~8,800 rows keep every feature but name a different protein set,
+    and ~11,600 regions are exchanged for as many others — about 1 row in 20. That is a
+    poor trade for no measurable gain, and it would invalidate every published artifact.
+
+    **Do not "fix" this by preferring percent identity.** At tied bit score, identity is a
+    ratio whose denominator is the alignment length, so ranking by it is ranking by
+    *shortness*: median region length falls 17 → 16 and regions of ≤7 residues rise from
+    2.64% to 2.73% of the table, which is the least trustworthy end of it. Mean bit score
+    is 27.17 under that rule, under this one, and under a longest-region rule alike — no
+    tie-break finds a better alignment, because there is no better alignment to find. If
+    this is ever changed, longest-aligned-region is the one direction that is defensible
+    (18.45 vs 18.37 mean residues, and fewer tiny regions), and ``sseqid`` must stay the
+    final key: a chain that can still tie falls back to DIAMOND's row order, which is the
+    order-dependence class fixed in `comet.process_files`.
+
+    The open scientific question this leaves — when several equally-scoring library
+    proteins contain the same region, which should the pipeline report? — is recorded as
+    `BENCHMARK_AUDIT.md` A91.
     """
     return (hit.evalue, -hit.bitscore, hit.sseqid)
 

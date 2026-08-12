@@ -427,6 +427,19 @@ overriding it.
 **`write_reset_input` resolves `sys.stdout` inside the function.** Not as a
 default argument, which would bind whatever the stream was at import time.
 
+**A query's "best" alignment is chosen by e-value, which under `--top 0` means by
+subject protein length.** The pipeline runs DIAMOND with `--top 0`, so it reports only
+alignments tied with the query's best score — over the mouse benchmark, **not one of
+146,334 queries has reported alignments differing in bit score**. Among equally-scoring
+alignments an e-value varies only with subject length, so `read_hits` resolves to "the
+region in the shortest library protein". That is unintended, and it is *kept* on
+measurement: breaking the tie by identity instead moves a trained feature on 0.23% of
+rows, flips no labels and has no target/decoy consequence, while changing the protein
+annotation on roughly 1 row in 20. **Do not switch it to percent identity** — at tied
+bit score that is a ratio over the alignment length, so it ranks by shortness and
+*increases* the population of ≤7-residue regions. See `_preference` in `diamond.py` for
+the numbers and `BENCHMARK_AUDIT.md` A91 for the open question underneath it.
+
 ---
 
 ## 8. Development
