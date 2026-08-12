@@ -207,11 +207,27 @@ peptide_sequence  charge  search_engine_score[1]  file
 mz_ppm_error  num_spectra  rank_score  num_peptidoforms
 ```
 
-- The sequence has inline modification masses stripped (`[^A-Z]` removed), so
-  `M+15.995DLGEEHFK` → `MDLGEEHFK`. The unstripped form is the peptidoform.
+- **Casanovo 5.x is the contract.** 5.x writes bare residues in `sequence` and
+  reports modifications positionally in its own `modifications` column
+  (`1-Oxidation (M):UNIMOD:35; 8-Oxidation (M):UNIMOD:35`). A `sequence` holding
+  anything but `A-Z` is **rejected**, not stripped — an inline modification mass
+  means pre-5.x output.
+- A **peptidoform** is `(sequence, modification state, charge)`. The modification
+  field is canonicalised by dropping `null`/empty and sorting its parts, so the
+  count does not depend on the order the writer emitted them in; sorting preserves
+  the multiset of parts and so cannot merge two genuinely different peptidoforms.
+- This module read 4.x inline modifications until 2026-08-12 and recovered the bare
+  peptide by stripping `[^A-Z]`. Against 5.x output that strip is a **no-op**, so
+  `num_peptidoforms` counted distinct charge states and nothing else. On the mouse
+  benchmark 363 `(sequence, charge)` pairs on the custom checkpoint and 772 on the
+  stock one carried two or more modification states and were counted as one. The
+  golden fixtures were converted to 5.x format representing the same peptidoforms,
+  and `golden/casanovo_peptides.txt` did not move.
 - **Negative scores get +1.** Casanovo subtracts 1 when a PSM fails its
   precursor m/z filter; adding it back deliberately disables that filter,
-  because the homology search — not Casanovo — decides what is credible.
+  because the homology search — not Casanovo — decides what is credible. 5.2.0
+  removed that filter from de novo mode, so this is a no-op on 5.x output and is
+  kept only as a guard.
 
 ### `collate_into_fasta.py FILE...`
 
@@ -413,7 +429,7 @@ contract** — it is what `python:3.10-slim` ships — and the newer legs are
 | --- | --- |
 | `tests/unit/test_massutil.py` | ppm error incl. 13C tolerance, rank scoring |
 | `tests/unit/test_comet.py` | trypticity, decoy status, PSM collapsing |
-| `tests/unit/test_casanovo.py` | mod stripping, score lift, collapsing |
+| `tests/unit/test_casanovo.py` | sequence validation, peptidoform identity, score lift, collapsing |
 | `tests/unit/test_fasta.py` | gzip, parsing, decoy generation |
 | `tests/unit/test_diamond.py` | parsing, tie-breaks, ambiguity, subject regions |
 | `tests/unit/test_reset_input.py` | grouping, labels, aggregation, ordering |

@@ -16,6 +16,7 @@ REQUIRED_COLUMNS = (
     "search_engine_score[1]",
     "calc_mass_to_charge",
     "exp_mass_to_charge",
+    "modifications",
 )
 
 OUTPUT_COLUMNS = (
@@ -29,8 +30,27 @@ OUTPUT_COLUMNS = (
     "num_peptidoforms",
 )
 
-#: Modifications appear inline in the mzTab sequence, e.g. "M+15.995DLGEEHFK".
+#: Casanovo 5.x writes bare residues in ``sequence`` and reports every modification
+#: positionally in its own ``modifications`` column:
+#: ``1-Oxidation (M):UNIMOD:35; 8-Oxidation (M):UNIMOD:35``.
+#:
+#: Casanovo 4.x wrote the modification inline in the sequence instead
+#: (``M+15.995DLGEEHFK``), and this module used to recover the bare peptide by
+#: stripping ``[^A-Z]``. Against 5.x output that strip is a **no-op** -- which is how
+#: ``num_peptidoforms`` came to count charge states and nothing else: every peptidoform
+#: of one peptide arrived with an identical ``sequence`` field, so the set they were
+#: added to could not tell them apart. Measured on the mouse benchmark, 363
+#: ``(sequence, charge)`` pairs on the custom checkpoint and 772 on the stock one carried
+#: two or more distinct modification states and were counted as one.
+#:
+#: 5.x is the contract now, so a sequence carrying anything but residues is **rejected
+#: rather than stripped**. Stripping is what hid the defect: a 4.x file read by this code
+#: would parse without complaint and produce peptidoform counts wrong in exactly the way
+#: this replaces.
 _NON_RESIDUE = re.compile(r"[^A-Z]")
+
+#: mzTab spells an absent value ``null``.
+_MZTAB_NULL = "null"
 
 
 class MzTabFormatError(ValueError):
@@ -50,9 +70,45 @@ class CasanovoPeptide:
     rank_score: float = 0.0
 
 
-def plain_sequence(peptidoform: str) -> str:
-    """Strip inline modification masses, leaving bare residues."""
-    return _NON_RESIDUE.sub("", peptidoform)
+def check_sequence(sequence: str, source: str) -> None:
+    """Reject a sequence that is not bare residues.
+
+    See ``_NON_RESIDUE``: an inline modification mass means pre-5.x output, which
+    this module no longer reads.
+    """
+    if _NON_RESIDUE.search(sequence):
+        raise MzTabFormatError(
+            f"Sequence {sequence!r} in {source} contains a non-residue character. "
+            f"This reads Casanovo 5.x mzTab, which writes bare residues in 'sequence' "
+            f"and modifications in the 'modifications' column; an inline modification "
+            f"mass means pre-5.x output, which is not supported."
+        )
+
+
+def normalise_modifications(modifications: str) -> str:
+    """Canonical form of an mzTab ``modifications`` field.
+
+    Two PSMs are the same peptidoform when they carry the same modifications at the
+    same positions. Casanovo writes them in position order, so equal peptidoforms
+    already produce equal strings; sorting the parts makes the key independent of that
+    ordering. Sorting cannot merge two genuinely different peptidoforms, because it
+    preserves the multiset of parts.
+
+    ``null`` and an empty field both mean unmodified.
+    """
+    if modifications.strip() in ("", _MZTAB_NULL):
+        return ""
+    return ";".join(sorted(part.strip() for part in modifications.split(";") if part.strip()))
+
+
+def peptidoform_key(sequence: str, modifications: str, charge: int) -> str:
+    """Identity of one peptidoform: residues, modification state and charge.
+
+    ``|`` separates the parts because it occurs in none of them. mzTab modification
+    syntax uses ``-``, ``;`` and ``:``, so the old ``f"{peptidoform}-{charge}"`` would
+    have been ambiguous once the modification column was read.
+    """
+    return f"{sequence}|{normalise_modifications(modifications)}|{charge}"
 
 
 def adjust_score(score: float) -> float:
@@ -73,7 +129,10 @@ def adjust_score(score: float) -> float:
 
     Casanovo 5.2.0 removed the precursor mass filter from de novo mode
     entirely (PR #575), so its de novo scores are never negative and this is a
-    no-op. Kept so that mzTab files from older versions still parse.
+    no-op on the output this module now reads. Kept as a guard rather than
+    deleted alongside the rest of the 4.x handling: it costs one comparison,
+    and a negative score reaching the ranking unadjusted would silently invert
+    that peptide's rank.
     """
     return score + 1 if score < 0 else score
 
@@ -104,8 +163,9 @@ def process_files(file_paths: Iterable[str | Path]) -> dict[str, CasanovoPeptide
                 if not row or not row[0].startswith("PSM"):
                     continue
 
-                peptidoform = row[index["sequence"]]
-                sequence = plain_sequence(peptidoform)
+                sequence = row[index["sequence"]]
+                check_sequence(sequence, source)
+                modifications = row[index["modifications"]]
                 charge = int(float(row[index["charge"]]))
                 # The ppm error is computed from the reported score's PSM before
                 # any adjustment; adjust_score only affects ranking.
@@ -131,7 +191,7 @@ def process_files(file_paths: Iterable[str | Path]) -> dict[str, CasanovoPeptide
 
                 current = peptides[sequence]
                 current.num_spectra += 1
-                current.peptidoforms.add(f"{peptidoform}-{charge}")
+                current.peptidoforms.add(peptidoform_key(sequence, modifications, charge))
 
     _assign_rank_scores(peptides)
     return peptides
